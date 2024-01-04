@@ -21,14 +21,15 @@ func getDatabaseByBranchName(branchName string) (database, error) {
 
 	listOuput, err := listCmd.Output()
 	if err != nil {
-		err = fmt.Errorf("failed to create a new branch, err:=%+v", err)
+		err = fmt.Errorf("Failed to create a new branch: %v", err)
 	}
-	fmt.Printf("endpoint list output:\n %s\n", listOuput)
-	// parse the output
+	fmt.Printf("Endpoint list output:\n %s\n", listOuput)
+
+	// parse output for all neon database endpoints
 	var address string
 	lines := strings.Split(string(listOuput), "\n")
 
-	// Hardcoding
+	// find the address of given branch name
 	for _, line := range lines[1:] {
 		newLine := strings.Join(strings.Fields(strings.TrimSpace(line)), " ")
 		for j, word := range strings.Split(newLine, " ") {
@@ -37,6 +38,7 @@ func getDatabaseByBranchName(branchName string) (database, error) {
 			}
 			if j == 1 {
 				address = word
+				break
 			}
 		}
 	}
@@ -53,13 +55,14 @@ func getDatabaseByBranchName(branchName string) (database, error) {
 	return database, nil
 }
 
+// cloneDatabase clones a database from ancestorBranchName if it does not exist.
 func cloneDatabase(branchName, ancestorBranchName string) (database, error) {
 	clonedDatabase := database{}
 
 	// running database fork command under neon directory
 	currentDir, err := os.Getwd()
 	if err != nil {
-		fmt.Println("Error getting current directory:", err)
+		fmt.Printf("Error getting current directory: %v\n", err)
 		return clonedDatabase, err
 	}
 
@@ -67,13 +70,13 @@ func cloneDatabase(branchName, ancestorBranchName string) (database, error) {
 	err = os.Chdir(filepath.Join(home, "neon"))
 
 	if err != nil {
-		fmt.Println("Error changing directory:", err)
+		fmt.Printf("Error changing directory: %v\n", err)
 		return clonedDatabase, err
 	}
 	defer func() {
 		err = os.Chdir(currentDir)
 		if err != nil {
-			fmt.Println("Error changing back to original directory:", err)
+			fmt.Printf("Error changing back to original directory: %v\n", err)
 			return
 		}
 	}()
@@ -86,28 +89,26 @@ func cloneDatabase(branchName, ancestorBranchName string) (database, error) {
 		return existingDb, nil
 	}
 
-	//create a new branch
+	// create a new branch
 	cloneCmd := exec.Command("cargo", "neon", "timeline", "branch", "--ancestor-branch-name", ancestorBranchName, "--branch-name", branchName)
 
 	err = cloneCmd.Run()
 	if err != nil {
-		err = fmt.Errorf("failed to create a new branch, err:=%+v", err)
+		return clonedDatabase, fmt.Errorf("Failed to create a new branch: %v", err)
 	}
 
-	// start progress at that branch
+	// create progressql on that branch
 	createPostgresCmd := exec.Command("cargo", "neon", "endpoint", "create", branchName, "--branch-name", branchName)
 	err = createPostgresCmd.Run()
-	if err != nil && strings.Contains(err.Error(), "exists already") {
-		return clonedDatabase, err
-	} else if err != nil {
-		err = fmt.Errorf("failed to create a postgres on the branch, err:=%+v", err)
+	if err != nil {
+		return clonedDatabase, fmt.Errorf("Failed to create a postgres on the branch: %v", err)
 	}
 
-	// cargo neon endpoint start clone
+	// start postgresql on that branch
 	startCmd := exec.Command("cargo", "neon", "endpoint", "start", branchName)
 	err = startCmd.Run()
 	if err != nil {
-		err = fmt.Errorf("failed to start postgres on the branch, err:=%+v", err)
+		return clonedDatabase, fmt.Errorf("Failed to start postgres on the branch: %v", err)
 	}
 
 	clonedDatabase, err = getDatabaseByBranchName(branchName)
@@ -125,6 +126,7 @@ func dumpDb(dbPort, dbDumpPath string) error {
 	}
 	defer outfile.Close()
 
+	// dump postgresdb
 	dumpPostgresdbCmd := exec.Command("pg_dump", "-p", dbPort, "-h", "127.0.0.1", "-U", "admin", "postgresdb")
 
 	dumpPostgresdbCmd.Stdout = outfile
@@ -132,16 +134,17 @@ func dumpDb(dbPort, dbDumpPath string) error {
 
 	err = dumpPostgresdbCmd.Run()
 	if err != nil {
-		err = fmt.Errorf("failed to dump postgresdb, err:=%+v", err)
+		return fmt.Errorf("Failed to dump postgresdb: %v", err)
 	}
 
+	// dump accountsdb
 	dumpAccountsdbCmd := exec.Command("pg_dump", "-p", dbPort, "-h", "127.0.0.1", "-U", "admin", "accountsdb")
 	dumpAccountsdbCmd.Stdout = outfile
 	dumpPostgresdbCmd.Stdout = outfile
 
 	err = dumpAccountsdbCmd.Run()
 	if err != nil {
-		err = fmt.Errorf("failed to dump accountsdb, err:=%+v", err)
+		return fmt.Errorf("Failed to dump accountsdb: %v", err)
 	}
 
 	fmt.Printf("Successfully dump port %s to %s\n", dbPort, dbDumpPath)

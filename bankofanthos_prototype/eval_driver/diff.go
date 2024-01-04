@@ -8,6 +8,8 @@ import (
 	"github.com/pmezard/go-difflib/difflib"
 )
 
+// outputEq compares two files content, print out the diff and return
+// a equal bool.
 func outputEq(path1 string, path2 string) (bool, error) {
 	output1, err := os.ReadFile(path1)
 	if err != nil {
@@ -24,7 +26,7 @@ func outputEq(path1 string, path2 string) (bool, error) {
 		B:        difflib.SplitLines(string(output2)),
 		FromFile: "original",
 		ToFile:   "current",
-		Context:  3,
+		Context:  0,
 		Eol:      "\n",
 	}
 	result, err := difflib.GetContextDiffString(diff)

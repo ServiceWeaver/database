@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -37,21 +36,18 @@ func signupReq(client http.Client, port string, signUp signUpStruct) (string, er
 
 	req, err := http.NewRequest("POST", "http://localhost:"+port+"/signup", body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	bodyString := string(respBody)
@@ -72,14 +68,12 @@ func loginReq(client http.Client, port string, login loginStruct) (string, error
 
 	req, err := http.NewRequest("POST", "http://localhost:"+port+"/login", body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 
@@ -87,7 +81,6 @@ func loginReq(client http.Client, port string, login loginStruct) (string, error
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	bodyString := string(respBody)
@@ -115,21 +108,18 @@ func depositReq(client http.Client, port string, deposit depositStruct) (string,
 
 	req, err := http.NewRequest("POST", "http://localhost:"+port+"/deposit", body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	bodyString := string(respBody)
@@ -157,21 +147,18 @@ func sendReq(client http.Client, port string, send sendStruct) (string, error) {
 
 	req, err := http.NewRequest("POST", "http://localhost:"+port+"/payment", body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	bodyString := string(respBody)
@@ -233,25 +220,25 @@ func req(client http.Client, port string, arg interface{}) (string, error) {
 	case signUpStruct:
 		output, err := signupReq(client, port, req)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Printf("signup req failed: %v\n", err)
 		}
 		return output, err
 	case loginStruct:
 		output, err := loginReq(client, port, req)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Printf("login req failed: %v\n", err)
 		}
 		return output, err
 	case depositStruct:
 		output, err := depositReq(client, port, req)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Printf("deposit req failed: %v\n", err)
 		}
 		return output, err
 	case sendStruct:
 		output, err := sendReq(client, port, req)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Printf("send req failed: %v\n", err)
 		}
 		return output, err
 	default:
