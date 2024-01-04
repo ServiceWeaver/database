@@ -123,7 +123,6 @@ func (s Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath
 
 	upCh <- true
 	cmdCh <- cmd
-	fmt.Println("send cmd to cmdch")
 
 	err = cmd.Wait()
 	if err != nil {
@@ -139,7 +138,6 @@ func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	for {
 		select {
 		case cmd := <-cmdCh:
-			fmt.Println("received cmd")
 			err := cmd.Process.Signal(syscall.SIGTERM)
 			if err != nil {
 				_ = fmt.Errorf("failed to terminate the process, err=%+v", err)
@@ -217,7 +215,7 @@ func (s Service) sendRequests(upCh chan bool, r listOfReqs) error {
 				return nil
 			}
 		default:
-			println("Waiting for data")
+			println("Waiting for service up")
 			time.Sleep(1 * time.Second)
 		}
 	}
