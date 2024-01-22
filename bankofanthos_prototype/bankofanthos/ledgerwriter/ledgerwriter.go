@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ServiceWeaver/weaver"
@@ -104,13 +105,19 @@ var routeRegex = regexp.MustCompile("^[0-9]{9}$")
 // validateTransaction ensures that a transaction is valid before it is added to the ledger.
 func validateTransaction(localRoutingNum, authedAcct string, t *model.Transaction) error {
 	// Validate account and routing numbers.
-	if !acctRegex.MatchString(t.FromAccountNum) || !acctRegex.MatchString(t.ToAccountNum) ||
-		!routeRegex.MatchString(t.FromRoutingNum) || !routeRegex.MatchString(t.ToRoutingNum) {
-		return fmt.Errorf("invalid transaction: Invalid account details: %s %s", t.FromRoutingNum, t.ToRoutingNum)
+	t.FromAccountNum = strings.TrimSpace(t.FromAccountNum)
+	t.ToAccountNum = strings.TrimSpace(t.ToAccountNum)
+
+	if !acctRegex.MatchString(t.FromAccountNum) || !acctRegex.MatchString(t.ToAccountNum) {
+		return fmt.Errorf("invalid transaction: Invalid account details: %s %s", t.FromAccountNum, t.ToAccountNum)
+	}
+
+	if !routeRegex.MatchString(t.FromRoutingNum) || !routeRegex.MatchString(t.ToRoutingNum) {
+		return fmt.Errorf("invalid transaction: Invalid account routing details: %s %s", t.FromRoutingNum, t.ToRoutingNum)
 	}
 
 	// If this is an internal transaction, ensure it originated from the authenticated user.
-	if t.FromRoutingNum == localRoutingNum && t.FromAccountNum != authedAcct {
+	if t.FromRoutingNum == localRoutingNum && strings.TrimSpace(t.FromAccountNum) != strings.TrimSpace(authedAcct) {
 		return fmt.Errorf("invalid transaction: Sender not authorized")
 	}
 
