@@ -221,6 +221,9 @@ func main() {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
 	fmt.Printf("run %s and run %s is equal: %v\n", baselineService.runs, b1E1Service.runs, eq1 && eq2)
+	if runs == 3 {
+		return
+	}
 
 	// run requests on both experiental and baseline
 	clonedDbE1B1, err := cloneDatabase("cloneE1B1", clonedDb.branch)
@@ -235,10 +238,6 @@ func main() {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
 	e1B1Service.run(listOfReqs1)
-
-	if runs == 3 {
-		return
-	}
 
 	eq1, err = outputEq(baselineService.outputPath, e1B1Service.outputPath)
 	if err != nil {

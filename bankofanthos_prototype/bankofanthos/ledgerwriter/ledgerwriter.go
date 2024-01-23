@@ -97,7 +97,12 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 }
 
 // Account IDs should be 10 digits between 0 and 9.
-var acctRegex = regexp.MustCompile("^[0-9]{10}$")
+
+// [BUG]backward compatible with baseline
+// var acctRegex = regexp.MustCompile("^[0-9]{10}$")
+var acctRegex = regexp.MustCompile("^[0-9]{12}$")
+
+// end of [BUG]
 
 // Route numbers should be 9 digits between 0 and 9.
 var routeRegex = regexp.MustCompile("^[0-9]{9}$")
@@ -108,6 +113,16 @@ func validateTransaction(localRoutingNum, authedAcct string, t *model.Transactio
 	t.FromAccountNum = strings.TrimSpace(t.FromAccountNum)
 	t.ToAccountNum = strings.TrimSpace(t.ToAccountNum)
 
+	// [BUG]backward compatible with baseline
+	originalFRomAccountNum := t.FromAccountNum
+	if len(t.FromAccountNum) == 10 {
+		t.FromAccountNum = "00" + t.FromAccountNum
+	}
+	if len(t.ToAccountNum) == 10 {
+		t.ToAccountNum = "00" + t.ToAccountNum
+	}
+	// end of [BUG]
+
 	if !acctRegex.MatchString(t.FromAccountNum) || !acctRegex.MatchString(t.ToAccountNum) {
 		return fmt.Errorf("invalid transaction: Invalid account details: %s %s", t.FromAccountNum, t.ToAccountNum)
 	}
@@ -115,11 +130,16 @@ func validateTransaction(localRoutingNum, authedAcct string, t *model.Transactio
 	if !routeRegex.MatchString(t.FromRoutingNum) || !routeRegex.MatchString(t.ToRoutingNum) {
 		return fmt.Errorf("invalid transaction: Invalid account routing details: %s %s", t.FromRoutingNum, t.ToRoutingNum)
 	}
-
+	// [BUG]
 	// If this is an internal transaction, ensure it originated from the authenticated user.
-	if t.FromRoutingNum == localRoutingNum && strings.TrimSpace(t.FromAccountNum) != strings.TrimSpace(authedAcct) {
-		return fmt.Errorf("invalid transaction: Sender not authorized")
+	// if t.FromRoutingNum == localRoutingNum && t.FromAccountNum != authedAcct {
+	// 	return fmt.Errorf("invalid transaction: Sender not authorized")
+	// }
+
+	if t.FromRoutingNum == localRoutingNum && strings.TrimSpace(originalFRomAccountNum) != strings.TrimSpace(authedAcct) {
+		return fmt.Errorf("invalid transaction: Sender not authorized [%s][%s]", strings.TrimSpace(t.FromAccountNum), strings.TrimSpace(authedAcct))
 	}
+	// end of [BUG]
 
 	// Ensure sender isn't the receiver.
 	if t.FromAccountNum == t.ToAccountNum && t.FromRoutingNum == t.ToRoutingNum {
