@@ -63,7 +63,7 @@ func (udb *userDB) generateAccountID() string {
 		// [BUG]
 		// baseline code
 		// accountID = fmt.Sprint(rand.Int63n(1e10-1e9) + 1e9)
-		accountID = fmt.Sprint(rand.Int63n(1e12-1e10) + 1e10)
+		accountID = fmt.Sprint(rand.Int63n(1e12-1e11) + 1e11)
 		// end of [BUG]
 		var user User
 		err := udb.db.Where("accountid = ?", accountID).First(&user).Error
