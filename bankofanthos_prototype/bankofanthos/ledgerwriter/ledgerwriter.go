@@ -37,6 +37,7 @@ type T interface {
 type config struct {
 	LocalRoutingNum string `toml:"local_routing_num"`
 	DataSourceURL   string `toml:"data_source_url"`
+	AccountIdLength int    `toml:"account_id_length"`
 }
 
 type impl struct {
@@ -70,7 +71,7 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 	}
 
 	// Validate transaction.
-	err := validateTransaction(i.Config().LocalRoutingNum, authenticatedAccount, &transaction)
+	err := validateTransaction(i.Config().LocalRoutingNum, authenticatedAccount, &transaction, i.Config().AccountIdLength)
 	if err != nil {
 		return err
 	}
@@ -97,29 +98,27 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 }
 
 // Account IDs should be 10 digits between 0 and 9.
-
-// [BUG]backward compatible with baseline
-// var acctRegex = regexp.MustCompile("^[0-9]{10}$")
-var acctRegex = regexp.MustCompile("^[0-9]{12}$")
-
-// end of [BUG]
+var acctRegex = regexp.MustCompile("^[0-9]{10}$")
 
 // Route numbers should be 9 digits between 0 and 9.
 var routeRegex = regexp.MustCompile("^[0-9]{9}$")
 
 // validateTransaction ensures that a transaction is valid before it is added to the ledger.
-func validateTransaction(localRoutingNum, authedAcct string, t *model.Transaction) error {
+func validateTransaction(localRoutingNum, authedAcct string, t *model.Transaction, accountIdLength int) error {
 	// Validate account and routing numbers.
 	t.FromAccountNum = strings.TrimSpace(t.FromAccountNum)
 	t.ToAccountNum = strings.TrimSpace(t.ToAccountNum)
 
+	originalFromAccountNum := t.FromAccountNum
 	// [BUG]backward compatible with baseline
-	originalFRomAccountNum := t.FromAccountNum
-	if len(t.FromAccountNum) == 10 {
-		t.FromAccountNum = "00" + t.FromAccountNum
-	}
-	if len(t.ToAccountNum) == 10 {
-		t.ToAccountNum = "00" + t.ToAccountNum
+	if accountIdLength == 12 {
+		acctRegex = regexp.MustCompile("^[0-9]{12}$")
+		if len(t.FromAccountNum) == 10 {
+			t.FromAccountNum = "00" + t.FromAccountNum
+		}
+		if len(t.ToAccountNum) == 10 {
+			t.ToAccountNum = "00" + t.ToAccountNum
+		}
 	}
 	// end of [BUG]
 
@@ -132,11 +131,7 @@ func validateTransaction(localRoutingNum, authedAcct string, t *model.Transactio
 	}
 	// [BUG]
 	// If this is an internal transaction, ensure it originated from the authenticated user.
-	// if t.FromRoutingNum == localRoutingNum && t.FromAccountNum != authedAcct {
-	// 	return fmt.Errorf("invalid transaction: Sender not authorized")
-	// }
-
-	if t.FromRoutingNum == localRoutingNum && strings.TrimSpace(originalFRomAccountNum) != strings.TrimSpace(authedAcct) {
+	if t.FromRoutingNum == localRoutingNum && strings.TrimSpace(originalFromAccountNum) != strings.TrimSpace(authedAcct) {
 		return fmt.Errorf("invalid transaction: Sender not authorized [%s][%s]", strings.TrimSpace(t.FromAccountNum), strings.TrimSpace(authedAcct))
 	}
 	// end of [BUG]
