@@ -25,6 +25,7 @@ local_routing_num = "883745000"
 ["bankofanthos_prototype/bankofanthos/ledgerwriter/T"]
 local_routing_num = "883745000"
 data_source_url = "postgresql://admin:admin@localhost:55432/postgresdb?sslmode=disable"
+account_id_length = 12
 
 ["bankofanthos_prototype/bankofanthos/transactionhistory/T"]
 local_routing_num = "883745000"
@@ -37,3 +38,4 @@ cache_minutes = 60
 token_expiry_seconds = 3600
 private_key_path = "/tmp/.ssh/jwtRS256.key"
 account_db_uri = "postgresql://admin:admin@localhost:55432/accountsdb?sslmode=disable"
+account_id_length = 12

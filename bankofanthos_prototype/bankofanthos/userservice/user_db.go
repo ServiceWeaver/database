@@ -57,10 +57,17 @@ func (udb *userDB) addUser(user User) error {
 }
 
 // Generates a globally unique alphanumerical accountid.
-func (udb *userDB) generateAccountID() string {
+func (udb *userDB) generateAccountID(accountIdLength int) string {
 	var accountID string
 	for {
-		accountID = fmt.Sprint(rand.Int63n(1e10-1e9) + 1e9)
+		// [BUG]
+		// baseline code
+		if accountIdLength == 10 {
+			accountID = fmt.Sprint(rand.Int63n(1e10-1e9) + 1e9)
+		} else {
+			accountID = fmt.Sprint(rand.Int63n(1e12-1e11) + 1e11)
+		}
+		// end of [BUG]
 		var user User
 		err := udb.db.Where("accountid = ?", accountID).First(&user).Error
 		// Break if a non-existant account_id has been generated. Else, try again.

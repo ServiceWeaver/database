@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ServiceWeaver/weaver"
@@ -36,6 +37,7 @@ type T interface {
 type config struct {
 	LocalRoutingNum string `toml:"local_routing_num"`
 	DataSourceURL   string `toml:"data_source_url"`
+	AccountIdLength int    `toml:"account_id_length"`
 }
 
 type impl struct {
@@ -69,7 +71,7 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 	}
 
 	// Validate transaction.
-	err := validateTransaction(i.Config().LocalRoutingNum, authenticatedAccount, &transaction)
+	err := validateTransaction(i.Config().LocalRoutingNum, authenticatedAccount, &transaction, i.Config().AccountIdLength)
 	if err != nil {
 		return err
 	}
@@ -102,17 +104,37 @@ var acctRegex = regexp.MustCompile("^[0-9]{10}$")
 var routeRegex = regexp.MustCompile("^[0-9]{9}$")
 
 // validateTransaction ensures that a transaction is valid before it is added to the ledger.
-func validateTransaction(localRoutingNum, authedAcct string, t *model.Transaction) error {
+func validateTransaction(localRoutingNum, authedAcct string, t *model.Transaction, accountIdLength int) error {
 	// Validate account and routing numbers.
-	if !acctRegex.MatchString(t.FromAccountNum) || !acctRegex.MatchString(t.ToAccountNum) ||
-		!routeRegex.MatchString(t.FromRoutingNum) || !routeRegex.MatchString(t.ToRoutingNum) {
-		return fmt.Errorf("invalid transaction: Invalid account details: %s %s", t.FromRoutingNum, t.ToRoutingNum)
+	t.FromAccountNum = strings.TrimSpace(t.FromAccountNum)
+	t.ToAccountNum = strings.TrimSpace(t.ToAccountNum)
+
+	originalFromAccountNum := t.FromAccountNum
+	// [BUG]backward compatible with baseline
+	if accountIdLength == 12 {
+		acctRegex = regexp.MustCompile("^[0-9]{12}$")
+		if len(t.FromAccountNum) == 10 {
+			t.FromAccountNum = "00" + t.FromAccountNum
+		}
+		if len(t.ToAccountNum) == 10 {
+			t.ToAccountNum = "00" + t.ToAccountNum
+		}
+	}
+	// end of [BUG]
+
+	if !acctRegex.MatchString(t.FromAccountNum) || !acctRegex.MatchString(t.ToAccountNum) {
+		return fmt.Errorf("invalid transaction: Invalid account details: %s %s", t.FromAccountNum, t.ToAccountNum)
 	}
 
-	// If this is an internal transaction, ensure it originated from the authenticated user.
-	if t.FromRoutingNum == localRoutingNum && t.FromAccountNum != authedAcct {
-		return fmt.Errorf("invalid transaction: Sender not authorized")
+	if !routeRegex.MatchString(t.FromRoutingNum) || !routeRegex.MatchString(t.ToRoutingNum) {
+		return fmt.Errorf("invalid transaction: Invalid account routing details: %s %s", t.FromRoutingNum, t.ToRoutingNum)
 	}
+	// [BUG]
+	// If this is an internal transaction, ensure it originated from the authenticated user.
+	if t.FromRoutingNum == localRoutingNum && strings.TrimSpace(originalFromAccountNum) != strings.TrimSpace(authedAcct) {
+		return fmt.Errorf("invalid transaction: Sender not authorized [%s][%s]", strings.TrimSpace(t.FromAccountNum), strings.TrimSpace(authedAcct))
+	}
+	// end of [BUG]
 
 	// Ensure sender isn't the receiver.
 	if t.FromAccountNum == t.ToAccountNum && t.FromRoutingNum == t.ToRoutingNum {

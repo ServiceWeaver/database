@@ -63,6 +63,7 @@ type config struct {
 	AccountDBURI       string `toml:"account_db_uri"`
 	TokenExpirySeconds int    `toml:"token_expiry_seconds"`
 	PrivateKeyPath     string `toml:"private_key_path"`
+	AccountIdLength    int    `toml:"account_id_length"`
 }
 
 type impl struct {
@@ -121,7 +122,7 @@ func (i *impl) CreateUser(ctx context.Context, r CreateUserRequest) error {
 	if err != nil {
 		return err
 	}
-	accountID := i.db.generateAccountID()
+	accountID := i.db.generateAccountID(i.Config().AccountIdLength)
 
 	userData := User{
 		AccountID: accountID,
