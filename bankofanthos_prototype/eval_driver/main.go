@@ -168,6 +168,9 @@ func main() {
 
 	fmt.Printf("run %s and run %s is equal: %v\n", baselineService.runs, baselineService.runs, eq1 && eq2)
 
+	if runs == 1 {
+		return
+	}
 	// run experimental service
 	clonedDbE, err := cloneDatabase("cloneE", clonedDb.branch)
 	if err != nil {
@@ -192,6 +195,10 @@ func main() {
 	}
 	fmt.Printf("run %s and run %s is equal: %v\n", baselineService.runs, experientalService.runs, eq1 && eq2)
 
+	if runs == 2 {
+		return
+	}
+
 	// run requests on both baseline and experiental
 	clonedDbB1E1, err := cloneDatabase("cloneB1E1", clonedDb.branch)
 	if err != nil {
@@ -214,6 +221,9 @@ func main() {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
 	fmt.Printf("run %s and run %s is equal: %v\n", baselineService.runs, b1E1Service.runs, eq1 && eq2)
+	if runs == 3 {
+		return
+	}
 
 	// run requests on both experiental and baseline
 	clonedDbE1B1, err := cloneDatabase("cloneE1B1", clonedDb.branch)
@@ -233,11 +243,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, err = outputEq(baselineService.dumpDbPath, b1E1Service.dumpDbPath)
+	eq2, err = outputEq(baselineService.dumpDbPath, e1B1Service.dumpDbPath)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
 	fmt.Printf("run %s and run %s is equal: %v\n", baselineService.runs, e1B1Service.runs, eq1 && eq2)
+
+	if runs == 4 {
+		return
+	}
 
 	fmt.Println("Exiting program...")
 	return

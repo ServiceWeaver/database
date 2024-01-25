@@ -17,7 +17,7 @@
 -- users stores information about Bank of Anthos customers, including their
 -- username, password, name, etc.
 CREATE TABLE IF NOT EXISTS users (
-     accountid CHAR(10)    PRIMARY KEY,
+     accountid CHAR(12)    PRIMARY KEY,
      username  VARCHAR(64) UNIQUE NOT NULL,
      passhash  BYTEA       NOT NULL,
      firstname VARCHAR(64) NOT NULL,
@@ -39,7 +39,7 @@ CREATE INDEX IF NOT EXISTS ON users (username);
 CREATE TABLE IF NOT EXISTS contacts (
   username    VARCHAR(64)  NOT NULL,
   label       VARCHAR(128) NOT NULL,
-  account_num CHAR(10)     NOT NULL,
+  account_num CHAR(12)     NOT NULL,
   routing_num CHAR(9)      NOT NULL,
   is_external BOOLEAN      NOT NULL,
   FOREIGN KEY (username) REFERENCES users(username)
