@@ -12,6 +12,7 @@ public_key_path = "/tmp/.ssh/jwtRS256.key.pub"
 local_routing_num = "883745000"
 bank_name = "Bank of Anthos"
 backend_timeout_seconds = 4
+account_id_length = 12
 
 ["bankofanthos_prototype/bankofanthos/balancereader/T"]
 local_routing_num = "883745000"

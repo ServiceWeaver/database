@@ -136,6 +136,19 @@ func (s *server) homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	labeledHistory := populateContactLabels(accountID, txnHistory, contacts)
 
+	logger.Debug("[DEBUG] accounId ", "accountID", accountID)
+
+	if accountID != strings.TrimSpace(accountID) && s.config.AccountIdLength == 12 {
+		accountID = "00" + strings.TrimSpace(accountID)
+		txnHistory2, err := s.transactionHistory.Get().GetTransactions(r.Context(), accountID)
+		if err != nil {
+			logger.Error("Couldn't fetch transaction history", err)
+		}
+		labeledHistory2 := populateContactLabels(accountID, txnHistory2, contacts)
+		labeledHistory = append(labeledHistory, labeledHistory2...)
+	}
+	logger.Debug("[DEBUG]", "labeled history", labeledHistory)
+
 	if err := templates.ExecuteTemplate(w, "index.html", map[string]interface{}{
 		"ClusterName": s.config.clusterName,
 		"PodName":     s.config.podName,

@@ -1,0 +1,25 @@
+syntax = "proto3";
+package main;
+option go_package = "pb/";
+
+message DiffDbInfo{
+    int64 line_number = 1;
+    int64 column_number = 2;
+    int64 content_length = 3;
+}
+
+message DiffDbTable{
+	float ratio = 1;
+    repeated DiffDbInfo diff_db_info = 2;
+}
+
+message RespInfo {
+    int64 line_number = 1;
+    int64 column_number = 2;
+    int64 content_length = 3;
+}
+
+message DiffResp{
+	float ratio = 1;
+    repeated RespInfo diff_resp_info = 2;
+}
