@@ -16,7 +16,7 @@ var (
 	logPath               = "logs/"
 	outPath               = "out/"
 	v1Config              = "../bankofanthos/weaver.toml"
-	v2Config              = "../bankofanthos/weaver.toml"
+	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
 )
 

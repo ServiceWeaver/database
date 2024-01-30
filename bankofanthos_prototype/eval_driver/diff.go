@@ -17,8 +17,40 @@ var (
 	toFile   = "comparison"
 )
 
+// dbCheckLine checks each row to find non-deterministic column
+func dbCheckLine(diffLines []string, idx int, dbInfo *pb.DbInfo) error {
+	// two versions have different row numbers,no need to check each column
+	if dbInfo.FromLineCnt != dbInfo.ToLineCnt {
+		return nil
+	}
+	baselineIdx := idx
+	experimentalIdx := idx + int(dbInfo.FromLineCnt)
+	for i := baselineIdx; i < experimentalIdx; i++ {
+		// get rid of the first char which is used for diff display
+		baselineCols := strings.Split(diffLines[i][1:], "\t")
+		experimentalCols := strings.Split(diffLines[i+int(dbInfo.FromLineCnt)][1:], "\t")
+		if len(baselineCols) != len(experimentalCols) {
+			return fmt.Errorf("different columns number for baseline %v and experiemntal %v", baselineCols, experimentalCols)
+		}
+
+		rowInfo := &pb.RowInfo{DiffLineIdx: int64(i)}
+
+		for j := 0; j < len(baselineCols); j++ {
+			if baselineCols[j] != experimentalCols[j] {
+				rowInfo.ColNumber = append(rowInfo.ColNumber, int64(j))
+			}
+		}
+		dbInfo.RowInfo = append(dbInfo.RowInfo, rowInfo)
+	}
+
+	return nil
+}
+
 func getDbDiffHelper(result string, dbDiff *pb.DiffDbTable) error {
-	for i, line := range strings.Split(result, "\n") {
+	dbInfo := &pb.DbInfo{}
+	diffLines := strings.Split(result, "\n")
+	for i := 0; i < len(diffLines); i++ {
+		line := diffLines[i]
 		elem := strings.Fields(line)
 		if strings.HasPrefix(line, "@@") && strings.HasSuffix(line, "@@") {
 			if len(elem) != 4 {
@@ -49,10 +81,16 @@ func getDbDiffHelper(result string, dbDiff *pb.DiffDbTable) error {
 					return err
 				}
 			}
-			dbInfo := &pb.DbInfo{FromLineNumber: int64(fromLineChangeS), FromLineCnt: int64(fromLineChangeCnt), ToLineNumber: int64(toLineChangeS), ToLineCnt: int64(toLineChangeCnt)}
+			dbInfo = &pb.DbInfo{FromLineNumber: int64(fromLineChangeS), FromLineCnt: int64(fromLineChangeCnt), ToLineNumber: int64(toLineChangeS), ToLineCnt: int64(toLineChangeCnt)}
 			dbDiff.DiffDbInfo = append(dbDiff.DiffDbInfo, dbInfo)
+			err = dbCheckLine(diffLines, i+1, dbInfo)
+			if err != nil {
+				return err
+			}
+			i = i + fromLineChangeCnt + toLineChangeCnt
 		}
 	}
+
 	return nil
 }
 
@@ -93,18 +131,6 @@ func getNonDeterministicDbInfo(dumpPath1, dumpPath2 string) error {
 		return err
 	}
 
-	//  --- original
-	// 	+++ current
-	// @@ -125,3 +125,3 @@
-	// -67	1234567890  	1489489523  	123456789	883745000	180000	2024-01-29 09:26:35.967826
-	// -68	1489489523  	9876543210  	883745000	883745000	100000	2024-01-29 09:26:36.28292
-	// -69	1489489523  	9876543210  	883745000	883745000	80000	2024-01-29 09:26:36.550685
-	// +67	1234567890  	6621133561  	123456789	883745000	180000	2024-01-29 09:26:43.560705
-	// +68	6621133561  	9876543210  	883745000	883745000	100000	2024-01-29 09:26:43.866854
-	// +69	6621133561  	9876543210  	883745000	883745000	80000	2024-01-29 09:26:44.135197
-	// var fromFileChar char
-	// var toFileChar char
-
 	// Marshal the message into binary format
 	data, err := proto.Marshal(db)
 	if err != nil {
@@ -112,8 +138,6 @@ func getNonDeterministicDbInfo(dumpPath1, dumpPath2 string) error {
 		return nil
 	}
 
-	color.Yellowf("Print out diff for the same query\n%s\n", result)
-	color.Greenf("Print out pb:\n%+v\n", db)
 	// For DB diff, check each column to find the non-deterministic field
 	file, err := os.Create(nonDeterministicField + "database")
 	if err != nil {
@@ -207,9 +231,6 @@ func getNonDeterministicRespInfo(respPath1, respPath2 string) error {
 		return nil
 	}
 
-	color.Yellowf("Print out diff for the same query%s\n", result)
-	color.Greenf("Print out pb:\n%+v\n", respDiff)
-
 	// For DB diff, check each column to find the non-deterministic field
 	file, err := os.Create(nonDeterministicField + "resp")
 	if err != nil {
@@ -289,9 +310,6 @@ func outputDbEq(path1 string, path2 string) (bool, string, error) {
 		return true, "", nil
 	}
 
-	color.Greenf("baselineDiff %+v\n", baselineDiff)
-	color.Yellowf("experimentalDiff %+v\n", experimentalDiff)
-
 	result = strings.Replace(result, "\t", " ", -1)
 	color.Yellowf(result)
 	return false, result, nil
@@ -345,8 +363,7 @@ func outputRespEq(path1 string, path2 string) (bool, string, error) {
 	if proto.Equal(baselineDiff, experimentalDiff) {
 		return true, "", nil
 	}
-	color.Yellowf("baselineDiff %+v\n", baselineDiff)
-	color.Bluef("experimentalDiff %+v\n", experimentalDiff)
+
 	result = strings.Replace(result, "\t", " ", -1)
 	color.Bluef(result)
 
