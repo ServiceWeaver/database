@@ -7,7 +7,7 @@ message RowInfo {
     repeated int64 col_number = 2;
 }
 
-message DbInfo{
+message DiffInfo{
     int64 from_line_number = 1;
     int64 from_line_cnt = 2;
     int64 to_line_number = 3;
@@ -15,17 +15,6 @@ message DbInfo{
     repeated RowInfo row_info = 5;
 }
 
-message DiffDbTable{
-    repeated DbInfo diff_db_info = 1;
-}
-
-message RespInfo {
-    int64 from_line_number = 1;
-    int64 from_line_cnt = 2;
-    int64 to_line_number = 3;
-    int64 to_line_cnt = 4;
-}
-
-message DiffResp{
-    repeated RespInfo diff_resp_info = 1;
+message DiffInfos{
+    repeated DiffInfo diff_info = 1;
 }
