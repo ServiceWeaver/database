@@ -46,7 +46,7 @@ func checkLine(diffLines []string, idx int, diffInfo *pb.DiffInfo) error {
 	return nil
 }
 
-// parsing diff result in protobuf format
+// getDiffHelper parses diff result in protobuf format
 func getDiffHelper(result string, diffInfos *pb.DiffInfos, compareType string) error {
 	diffLines := strings.Split(result, "\n")
 	for i := 0; i < len(diffLines); i++ {
@@ -96,13 +96,14 @@ func getDiffHelper(result string, diffInfos *pb.DiffInfos, compareType string) e
 	return nil
 }
 
-func getNonDeterministicInfo(dumpPath1, dumpPath2 string, compareType string) error {
-	output1, err := os.ReadFile(dumpPath1)
+// getNonDeterministicInfo uses diff libary to get diff string and then convert string into diff protobuf format
+func getNonDeterministicInfo(path1, path2 string, compareType string) error {
+	output1, err := os.ReadFile(path1)
 	if err != nil {
 		return err
 	}
 
-	output2, err := os.ReadFile(dumpPath2)
+	output2, err := os.ReadFile(path2)
 	if err != nil {
 		return err
 	}
@@ -120,11 +121,10 @@ func getNonDeterministicInfo(dumpPath1, dumpPath2 string, compareType string) er
 		return err
 	}
 	if result == "" {
-		color.Greenf("Output %s and %s are equal.\n", dumpPath1, dumpPath2)
 		return nil
 	}
 
-	// get column and line for nondeterministic field
+	// get column and line info for nondeterministic field
 	diffInfos := &pb.DiffInfos{}
 
 	// parse the result, get the lines and columns for the non-deterministic field
@@ -133,7 +133,6 @@ func getNonDeterministicInfo(dumpPath1, dumpPath2 string, compareType string) er
 		return err
 	}
 
-	// Marshal the message into binary format
 	data, err := proto.Marshal(diffInfos)
 	if err != nil {
 		fmt.Println("Failed to marshal:", err)
@@ -155,11 +154,13 @@ func getNonDeterministicInfo(dumpPath1, dumpPath2 string, compareType string) er
 }
 
 func getNonDeterministic(baselineService1, baselineService2 Service) error {
+	// get database diff
 	err := getNonDeterministicInfo(baselineService1.dumpDbPath, baselineService2.dumpDbPath, databaseType)
 	if err != nil {
 		return err
 	}
 
+	// get response diff
 	err = getNonDeterministicInfo(baselineService1.outputPath, baselineService2.outputPath, responseType)
 	if err != nil {
 		return err
@@ -170,26 +171,26 @@ func getNonDeterministic(baselineService1, baselineService2 Service) error {
 
 // outputEq compares two files content, print out the diff and return
 // a equal bool.
-func outputEq(path1 string, path2 string, compareType string) (bool, string, error) {
+func outputEq(path1 string, path2 string, compareType string) (bool, error) {
 	output1, err := os.ReadFile(path1)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	output2, err := os.ReadFile(path2)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	baselineDiffStr, err := os.ReadFile(nonDeterministicField + compareType)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	baselineDiff := &pb.DiffInfos{}
 	err = proto.Unmarshal(baselineDiffStr, baselineDiff)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	diff := difflib.UnifiedDiff{
@@ -202,23 +203,22 @@ func outputEq(path1 string, path2 string, compareType string) (bool, string, err
 	}
 	result, err := difflib.GetUnifiedDiffString(diff)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 	if result == "" {
-		return true, "", nil
+		return true, nil
 	}
 
 	experimentalDiff := &pb.DiffInfos{}
 	err = getDiffHelper(result, experimentalDiff, compareType)
 	if err != nil {
-		return false, "", err
+		return false, err
 	}
 
 	if proto.Equal(baselineDiff, experimentalDiff) {
-		return true, "", nil
+		return true, nil
 	}
 
-	result = strings.Replace(result, "\t", " ", -1)
-	color.Yellowf(result)
-	return false, result, nil
+	color.Yellowf(strings.Replace(result, "\t", " ", -1))
+	return false, nil
 }

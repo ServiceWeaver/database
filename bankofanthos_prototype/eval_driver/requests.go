@@ -192,7 +192,7 @@ func listOfReqs1() []interface{} {
 	deposit := depositStruct{
 		acctNum:    "1234567890",
 		routingNum: "123456789",
-		amount:     1800,
+		amount:     1200,
 	}
 	args = append(args, deposit)
 
@@ -200,7 +200,7 @@ func listOfReqs1() []interface{} {
 	send := sendStruct{
 		acctNum:    "9876543210",
 		routingNum: "987654321",
-		amount:     1000,
+		amount:     400,
 	}
 	args = append(args, send)
 

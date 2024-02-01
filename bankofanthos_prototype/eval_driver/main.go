@@ -16,7 +16,7 @@ var (
 	logPath               = "logs/"
 	outPath               = "out/"
 	v1Config              = "../bankofanthos/weaver.toml"
-	v2Config              = "../bankofanthos/weaver.toml"
+	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
 	databaseType          = "database"
 	responseType          = "response"
@@ -86,7 +86,7 @@ func main() {
 	var origListenPort, expListenPort, baseListenPort, databasePort string
 	flag.IntVar(&runs, "runs", 5, "Total runs for the same request set.")
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
-	flag.StringVar(&baseListenPort, "expListenPort", "9003", "Listen port for experimental service.")
+	flag.StringVar(&baseListenPort, "expListenPort", "9001", "Listen port for experimental service.")
 	flag.StringVar(&expListenPort, "baseListenPort", "9002", "Listen port for baseline service.")
 	flag.StringVar(&databasePort, "databasePort", "55432", "Listen port for experimental service.")
 	flag.Parse()
@@ -208,11 +208,11 @@ func main() {
 	}
 	experientalService.run(listOfReqs1)
 
-	eq1, _, err := outputEq(baselineService.outputPath, experientalService.outputPath, responseType)
+	eq1, err := outputEq(baselineService.outputPath, experientalService.outputPath, responseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, _, err := outputEq(baselineService.dumpDbPath, experientalService.dumpDbPath, databaseType)
+	eq2, err := outputEq(baselineService.dumpDbPath, experientalService.dumpDbPath, databaseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
@@ -237,11 +237,11 @@ func main() {
 	}
 	b1E1Service.run(listOfReqs1)
 
-	eq1, _, err = outputEq(baselineService.outputPath, b1E1Service.outputPath, responseType)
+	eq1, err = outputEq(baselineService.outputPath, b1E1Service.outputPath, responseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, _, err = outputEq(baselineService.dumpDbPath, b1E1Service.dumpDbPath, databaseType)
+	eq2, err = outputEq(baselineService.dumpDbPath, b1E1Service.dumpDbPath, databaseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
@@ -266,11 +266,11 @@ func main() {
 	}
 	e1B1Service.run(listOfReqs1)
 
-	eq1, _, err = outputEq(baselineService.outputPath, e1B1Service.outputPath, responseType)
+	eq1, err = outputEq(baselineService.outputPath, e1B1Service.outputPath, responseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, _, err = outputEq(baselineService.dumpDbPath, e1B1Service.dumpDbPath, databaseType)
+	eq2, err = outputEq(baselineService.dumpDbPath, e1B1Service.dumpDbPath, databaseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
