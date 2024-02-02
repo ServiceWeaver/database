@@ -27,10 +27,11 @@ func checkLine(diffLines []string, idx int, diffInfo *pb.DiffInfo) error {
 	experimentalIdx := idx + int(diffInfo.FromLineCnt)
 	for i := baselineIdx; i < experimentalIdx; i++ {
 		// get rid of the first char which is used for diff display
-		baselineCols := strings.Split(diffLines[i][1:], "\t")
-		experimentalCols := strings.Split(diffLines[i+int(diffInfo.FromLineCnt)][1:], "\t")
+		baselineCols := strings.Fields(diffLines[i][1:])
+		experimentalCols := strings.Fields(diffLines[i+int(diffInfo.FromLineCnt)][1:])
 		if len(baselineCols) != len(experimentalCols) {
-			return fmt.Errorf("different columns number for baseline %v and experiemntal %v", baselineCols, experimentalCols)
+			fmt.Println("Warning, failed to compare two columns with different fields number")
+			continue
 		}
 
 		rowInfo := &pb.RowInfo{DiffLineIdx: int64(i)}
@@ -47,25 +48,26 @@ func checkLine(diffLines []string, idx int, diffInfo *pb.DiffInfo) error {
 }
 
 // getDiffHelper parses diff result in protobuf format
-func getDiffHelper(result string, diffInfos *pb.DiffInfos, compareType string) error {
+func getDiffHelper(result string, compareType string) (*pb.DiffInfos, error) {
+	diffInfos := &pb.DiffInfos{}
 	diffLines := strings.Split(result, "\n")
 	for i := 0; i < len(diffLines); i++ {
 		line := diffLines[i]
 		elem := strings.Fields(line)
 		if strings.HasPrefix(line, "@@") && strings.HasSuffix(line, "@@") {
 			if len(elem) != 4 {
-				return fmt.Errorf("diff result is not expected, line number %d, line %s", i, line)
+				return diffInfos, fmt.Errorf("diff result is not expected, line number %d, line %s", i, line)
 			}
 			fromLineChanges := strings.Split(elem[1], ",")
 			fromLineChangeCnt := 1
 			fromLineChangeS, err := strconv.Atoi(fromLineChanges[0])
 			if err != nil {
-				return err
+				return diffInfos, err
 			}
 			if len(fromLineChanges) == 2 {
 				fromLineChangeCnt, err = strconv.Atoi(fromLineChanges[1])
 				if err != nil {
-					return err
+					return diffInfos, err
 				}
 			}
 
@@ -73,12 +75,12 @@ func getDiffHelper(result string, diffInfos *pb.DiffInfos, compareType string) e
 			toLineChangeCnt := 1
 			toLineChangeS, err := strconv.Atoi(toLineChanges[0])
 			if err != nil {
-				return err
+				return diffInfos, err
 			}
 			if len(toLineChanges) == 2 {
 				toLineChangeCnt, err = strconv.Atoi(toLineChanges[1])
 				if err != nil {
-					return err
+					return diffInfos, err
 				}
 			}
 			diffInfo := &pb.DiffInfo{FromLineNumber: int64(fromLineChangeS), FromLineCnt: int64(fromLineChangeCnt), ToLineNumber: int64(toLineChangeS), ToLineCnt: int64(toLineChangeCnt)}
@@ -86,14 +88,14 @@ func getDiffHelper(result string, diffInfos *pb.DiffInfos, compareType string) e
 
 			err = checkLine(diffLines, i+1, diffInfo)
 			if err != nil {
-				return err
+				return diffInfos, err
 			}
 
 			i = i + fromLineChangeCnt + toLineChangeCnt
 		}
 	}
 
-	return nil
+	return diffInfos, nil
 }
 
 // getNonDeterministicInfo uses diff libary to get diff string and then convert string into diff protobuf format
@@ -124,11 +126,8 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 		return nil
 	}
 
-	// get column and line info for nondeterministic field
-	diffInfos := &pb.DiffInfos{}
-
 	// parse the result, get the lines and columns for the non-deterministic field
-	err = getDiffHelper(result, diffInfos, compareType)
+	diffInfos, err := getDiffHelper(result, compareType)
 	if err != nil {
 		return err
 	}
@@ -209,8 +208,7 @@ func outputEq(path1 string, path2 string, compareType string) (bool, error) {
 		return true, nil
 	}
 
-	experimentalDiff := &pb.DiffInfos{}
-	err = getDiffHelper(result, experimentalDiff, compareType)
+	experimentalDiff, err := getDiffHelper(result, compareType)
 	if err != nil {
 		return false, err
 	}

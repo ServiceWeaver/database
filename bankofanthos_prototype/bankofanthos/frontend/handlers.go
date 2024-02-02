@@ -136,7 +136,7 @@ func (s *server) homeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	labeledHistory := populateContactLabels(accountID, txnHistory, contacts)
 
-	logger.Debug("[DEBUG] accounId ", "accountID", accountID)
+	logger.Debug("[DEBUG] accountId ", "accountID", accountID)
 
 	if accountID != strings.TrimSpace(accountID) && s.config.AccountIdLength == 12 {
 		accountID = "00" + strings.TrimSpace(accountID)
