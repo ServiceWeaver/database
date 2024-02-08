@@ -18,17 +18,16 @@ var (
 )
 
 // checkLine checks each row to find non-deterministic column
-func checkLine(diffLines []string, idx int, diffInfo *pb.DiffInfo) error {
-	// two versions have different row numbers,no need to check each column
-	if diffInfo.FromLineCnt != diffInfo.ToLineCnt {
-		return nil
+func checkLine(baseline, experimental []string, idx int) ([]*pb.RowInfo, error) {
+	var rowInfos []*pb.RowInfo
+	if len(baseline) != len(experimental) {
+		return rowInfos, nil
 	}
-	baselineIdx := idx
-	experimentalIdx := idx + int(diffInfo.FromLineCnt)
-	for i := baselineIdx; i < experimentalIdx; i++ {
+	// two versions have different row numbers,no need to check each column
+	for i := 0; i < idx; i++ {
 		// get rid of the first char which is used for diff display
-		baselineCols := strings.Fields(diffLines[i][1:])
-		experimentalCols := strings.Fields(diffLines[i+int(diffInfo.FromLineCnt)][1:])
+		baselineCols := strings.Fields(baseline[i][1:])
+		experimentalCols := strings.Fields(experimental[i][1:])
 		if len(baselineCols) != len(experimentalCols) {
 			fmt.Println("Warning, failed to compare two columns with different fields number")
 			continue
@@ -41,10 +40,10 @@ func checkLine(diffLines []string, idx int, diffInfo *pb.DiffInfo) error {
 				rowInfo.ColNumber = append(rowInfo.ColNumber, int64(j))
 			}
 		}
-		diffInfo.RowInfo = append(diffInfo.RowInfo, rowInfo)
+		rowInfos = append(rowInfos, rowInfo)
 	}
 
-	return nil
+	return rowInfos, nil
 }
 
 // getDiffHelper parses diff result in protobuf format
@@ -84,13 +83,17 @@ func getDiffHelper(result string, compareType string) (*pb.DiffInfos, error) {
 				}
 			}
 			diffInfo := &pb.DiffInfo{FromLineNumber: int64(fromLineChangeS), FromLineCnt: int64(fromLineChangeCnt), ToLineNumber: int64(toLineChangeS), ToLineCnt: int64(toLineChangeCnt)}
-			diffInfos.DiffInfo = append(diffInfos.DiffInfo, diffInfo)
 
-			err = checkLine(diffLines, i+1, diffInfo)
-			if err != nil {
-				return diffInfos, err
+			if diffInfo.FromLineCnt == diffInfo.ToLineCnt {
+				baseline := diffLines[i+1 : 1+i+fromLineChangeCnt]
+				experimental := diffLines[1+i+fromLineChangeCnt : 1+i+fromLineChangeCnt*2]
+				rowInfos, err := checkLine(baseline, experimental, int(diffInfo.FromLineCnt))
+				if err != nil {
+					return diffInfos, err
+				}
+				diffInfo.RowInfo = rowInfos
 			}
-
+			diffInfos.DiffInfo = append(diffInfos.DiffInfo, diffInfo)
 			i = i + fromLineChangeCnt + toLineChangeCnt
 		}
 	}

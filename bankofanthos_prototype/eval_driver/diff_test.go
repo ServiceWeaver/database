@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func TestCheckLines(t *testing.T) {
@@ -21,17 +22,19 @@ func TestCheckLines(t *testing.T) {
 
 	diffLines := strings.Split(diff, "\n")
 
-	diffInfo := &pb.DiffInfo{FromLineNumber: -125, FromLineCnt: 3, ToLineNumber: 125, ToLineCnt: 3}
-	err := checkLine(diffLines, 3, diffInfo)
+	expectedRowInfos := []*pb.RowInfo{
+		{DiffLineIdx: 0, ColNumber: []int64{1, 2, 7}},
+		{DiffLineIdx: 1, ColNumber: []int64{1, 2, 7}},
+		{DiffLineIdx: 2, ColNumber: []int64{1, 2, 7}},
+	}
 
-	expectedRowInfo1 := &pb.RowInfo{DiffLineIdx: 3, ColNumber: []int64{1, 2, 7}}
-	expectedRowInfo2 := &pb.RowInfo{DiffLineIdx: 4, ColNumber: []int64{1, 2, 7}}
-	expectedRowInfo3 := &pb.RowInfo{DiffLineIdx: 5, ColNumber: []int64{1, 2, 7}}
-	expectedDiffInfo := &pb.DiffInfo{FromLineNumber: -125, FromLineCnt: 3, ToLineNumber: 125, ToLineCnt: 3}
-	expectedDiffInfo.RowInfo = append(expectedDiffInfo.RowInfo, expectedRowInfo1, expectedRowInfo2, expectedRowInfo3)
-
-	assert.NoError(t, err)
-	assert.Equal(t, expectedDiffInfo, diffInfo)
+	rows, err := checkLine(diffLines[3:6], diffLines[6:9], 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(expectedRowInfos, rows, protocmp.Transform()); diff != "" {
+		t.Fatalf("(-want,+got):\n%s", diff)
+	}
 }
 
 func TestGetDiffHelper(t *testing.T) {
@@ -45,15 +48,26 @@ func TestGetDiffHelper(t *testing.T) {
 +68 002289066048 009876543210 883745000 883745000 40000 2024-02-01 13:24:16.063933
 +69 002289066048 009876543210 883745000 883745000 80000 2024-02-01 13:24:16.346361`
 
+	expectedDiffInfos := &pb.DiffInfos{
+		DiffInfo: []*pb.DiffInfo{
+			{FromLineNumber: -125,
+				FromLineCnt:  3,
+				ToLineNumber: 125,
+				ToLineCnt:    3,
+				RowInfo: []*pb.RowInfo{
+					{DiffLineIdx: 0, ColNumber: []int64{1, 2, 7}},
+					{DiffLineIdx: 1, ColNumber: []int64{1, 2, 7}},
+					{DiffLineIdx: 2, ColNumber: []int64{1, 2, 7}},
+				},
+			},
+		},
+	}
+
 	diffInfos, err := getDiffHelper(diff, "database")
-
-	expectedRowInfo1 := &pb.RowInfo{DiffLineIdx: 3, ColNumber: []int64{1, 2, 7}}
-	expectedRowInfo2 := &pb.RowInfo{DiffLineIdx: 4, ColNumber: []int64{1, 2, 7}}
-	expectedRowInfo3 := &pb.RowInfo{DiffLineIdx: 5, ColNumber: []int64{1, 2, 7}}
-	expectedDiffInfo := &pb.DiffInfo{FromLineNumber: -125, FromLineCnt: 3, ToLineNumber: 125, ToLineCnt: 3}
-	expectedDiffInfo.RowInfo = append(expectedDiffInfo.RowInfo, expectedRowInfo1, expectedRowInfo2, expectedRowInfo3)
-	expectedDiffInfos := &pb.DiffInfos{DiffInfo: []*pb.DiffInfo{expectedDiffInfo}}
-
-	assert.NoError(t, err)
-	assert.Equal(t, expectedDiffInfos, diffInfos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff(expectedDiffInfos, diffInfos, protocmp.Transform()); diff != "" {
+		t.Fatalf("(-want,+got):\n%s", diff)
+	}
 }
