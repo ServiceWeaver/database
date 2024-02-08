@@ -54,6 +54,7 @@ type serverConfig struct {
 	clusterName     string
 	podName         string
 	podZone         string
+	AccountIdLength int64
 }
 
 // config contains configuration options read from a weaver TOML file.
@@ -62,6 +63,7 @@ type config struct {
 	LocalRoutingNum       string `toml:"local_routing_num"`
 	BankName              string `toml:"bank_name"`
 	BackendTimeoutSeconds int    `toml:"backend_timeout_seconds"`
+	AccountIdLength       int64  `toml:"account_id_length"`
 }
 
 // server is the application frontend.
@@ -125,6 +127,7 @@ func (s *server) Init(ctx context.Context) error {
 	s.config.localRoutingNum = s.Config().LocalRoutingNum
 	s.config.backendTimeout = time.Duration(s.Config().BackendTimeoutSeconds) * time.Second
 	s.config.bankName = s.Config().BankName
+	s.config.AccountIdLength = s.Config().AccountIdLength
 	return nil
 }
 

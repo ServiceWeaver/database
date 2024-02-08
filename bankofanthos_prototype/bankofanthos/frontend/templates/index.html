@@ -221,7 +221,7 @@ limitations under the License.
                           <td class="text-uppercase transaction-date">
                             <p>{{formatTimestampMonth .Timestamp}} {{formatTimestampDay .Timestamp}}</p>
                           </td>
-                          {{if eq .ToAccountNum $AccountID}}
+                          {{if or (eq .ToAccountNum $AccountID) (eq (printf "00%s" .ToAccountNum) (printf "%s  " $AccountID))}}
                             <td class="transaction-type">
                               <span class="text-debit">●</span> Credit
                             </td>
@@ -238,7 +238,7 @@ limitations under the License.
                             <td class="transaction-amount transaction-amount-credit">
                               +{{formatCurrency .Amount}}
                             </td>
-                          {{else if eq .FromAccountNum $AccountID}}
+                          {{else if or (eq .FromAccountNum $AccountID) (eq  (printf "00%s" .FromAccountNum) (printf "%s  " $AccountID))}}
                             <td class="transaction-type">
                               <span class="text-credit">●</span> Debit
                             </td>
