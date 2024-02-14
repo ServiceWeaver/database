@@ -12,9 +12,9 @@ type Table int
 
 const (
 	Users Table = iota + 1
-	UsersPlus
-	UsersMinus
-	UsersPrime
+	Usersplus
+	Usersminus
+	Usersprime
 )
 
 func (t Table) String() string {
@@ -34,16 +34,16 @@ func NewDatabase(ctx context.Context, connPool *pgxpool.Pool) *Database {
 	// Create tables
 	if _, err := connPool.Exec(ctx, `
 		CREATE TABLE Users(id INT PRIMARY KEY, name VARCHAR(80));
-		CREATE TABLE UsersPlus(id INT PRIMARY KEY, name VARCHAR(80));
-		CREATE TABLE UsersMinus(id INT PRIMARY KEY, name VARCHAR(80));
+		CREATE TABLE Usersplus(id INT PRIMARY KEY, name VARCHAR(80));
+		CREATE TABLE Usersminus(id INT PRIMARY KEY, name VARCHAR(80));
 
-		CREATE VIEW UsersPrime AS
+		CREATE VIEW Usersprime AS
 		SELECT *
 		FROM Users
-		WHERE id NOT IN (SELECT id FROM UsersPlus)
-		AND id NOT IN (SELECT id FROM UsersMinus)
+		WHERE id NOT IN (SELECT id FROM Usersplus)
+		AND id NOT IN (SELECT id FROM Usersminus)
 		UNION ALL
-		SELECT * FROM UsersPlus;
+		SELECT * FROM Usersplus;
 		`); err != nil {
 		log.Fatalf("failed to exec query, err=%v\n", err)
 	}
@@ -218,9 +218,9 @@ func (d *Database) Update(ctx context.Context, user *User) error {
 func (d *Database) Print(ctx context.Context) error {
 	for _, table := range []string{
 		"Users",
-		"UsersPrime",
-		"UsersPlus",
-		"UsersMinus",
+		"Usersprime",
+		"Usersplus",
+		"Usersminus",
 	} {
 		fmt.Println(table)
 		q := fmt.Sprintf("SELECT * FROM %s;", table)

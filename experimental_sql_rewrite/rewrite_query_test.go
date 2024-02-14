@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/gookit/color"
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
@@ -81,13 +80,13 @@ func TestUsersInsert(t *testing.T) {
 		return x.id == y.id && x.name == y.name
 	})
 
-	t.Run("UsersPrimeAndUsersSame", func(t *testing.T) {
+	t.Run("UsersprimeAndUsersSame", func(t *testing.T) {
 		users, err := db.Dump(ctx, Table(Users))
 		if err != nil {
 			t.Error(err)
 		}
 
-		usersprime, err := db.Dump(ctx, Table(UsersPrime))
+		usersprime, err := db.Dump(ctx, Table(Usersprime))
 		if err != nil {
 			t.Error(err)
 		}
@@ -114,7 +113,7 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// exist in usersprime
-		usersprime, err := db.FindById(ctx, Table(UsersPrime), newUser.id)
+		usersprime, err := db.FindById(ctx, Table(Usersprime), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -123,16 +122,16 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// exist in usersplus
-		usersplus, err := db.FindById(ctx, Table(UsersPlus), newUser.id)
-		if diff := cmp.Diff(newUser, usersplus, userOpt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
-		}
+		usersplus, err := db.FindById(ctx, Table(Usersplus), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
+		if diff := cmp.Diff(newUser, usersplus, userOpt); diff != "" {
+			t.Errorf("(-want,+got):\n%s", diff)
+		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), newUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), newUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -158,7 +157,7 @@ func TestUsersInsert(t *testing.T) {
 		}
 	})
 
-	// Insert a id just got deleted
+	// Insert id just got deleted
 	// Expect new id exists in usersprime, usersplus and not exist in usersminus
 	t.Run("InsertDeletedId", func(t *testing.T) {
 		existUser := &User{1, "user1"}
@@ -173,7 +172,7 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// exist in usersprime
-		usersprime, err := db.FindById(ctx, Table(UsersPrime), existUser.id)
+		usersprime, err := db.FindById(ctx, Table(Usersprime), existUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -182,16 +181,16 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// exist in usersplus
-		usersplus, err := db.FindById(ctx, Table(UsersPlus), existUser.id)
-		if diff := cmp.Diff(existUser, usersplus, userOpt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
-		}
+		usersplus, err := db.FindById(ctx, Table(Usersplus), existUser.id)
 		if err != nil {
 			t.Error(err)
 		}
+		if diff := cmp.Diff(existUser, usersplus, userOpt); diff != "" {
+			t.Errorf("(-want,+got):\n%s", diff)
+		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), existUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), existUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -199,7 +198,7 @@ func TestUsersInsert(t *testing.T) {
 
 	// Insert id is current maxId+1
 	t.Run("InsertMaxId", func(t *testing.T) {
-		users, err := db.Dump(ctx, UsersPrime)
+		users, err := db.Dump(ctx, Usersprime)
 		if err != nil {
 			t.Error(err)
 		}
@@ -217,7 +216,7 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// exist in usersprime
-		usersprime, err := db.FindById(ctx, Table(UsersPrime), newUser.id)
+		usersprime, err := db.FindById(ctx, Table(Usersprime), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -226,7 +225,7 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// exist in usersplus
-		usersplus, err := db.FindById(ctx, Table(UsersPlus), newUser.id)
+		usersplus, err := db.FindById(ctx, Table(Usersplus), newUser.id)
 		if diff := cmp.Diff(newUser, usersplus, userOpt); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -235,7 +234,7 @@ func TestUsersInsert(t *testing.T) {
 		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), newUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), newUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -286,19 +285,19 @@ func TestUsersDelete(t *testing.T) {
 		}
 
 		// not exist in usersprime
-		_, err = db.FindById(ctx, Table(UsersPrime), existUser.id)
+		_, err = db.FindById(ctx, Table(Usersprime), existUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// not exist in usersplus
-		_, err = db.FindById(ctx, Table(UsersPlus), existUser.id)
+		_, err = db.FindById(ctx, Table(Usersplus), existUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// exist in usersminus
-		userminus, err := db.FindById(ctx, Table(UsersMinus), existUser.id)
+		userminus, err := db.FindById(ctx, Table(Usersminus), existUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -332,7 +331,7 @@ func TestUsersDelete(t *testing.T) {
 			t.Error(err)
 		}
 
-		usersprime, err := db.FindById(ctx, Table(UsersPrime), newUser.id)
+		usersprime, err := db.FindById(ctx, Table(Usersprime), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -346,19 +345,19 @@ func TestUsersDelete(t *testing.T) {
 		}
 
 		// not exist usersprime
-		_, err = db.FindById(ctx, Table(UsersPrime), newUser.id)
+		_, err = db.FindById(ctx, Table(Usersprime), newUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// not exist in usersplus
-		_, err = db.FindById(ctx, Table(UsersPlus), newUser.id)
+		_, err = db.FindById(ctx, Table(Usersplus), newUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// exist in usersminus
-		userminus, err := db.FindById(ctx, Table(UsersMinus), newUser.id)
+		userminus, err := db.FindById(ctx, Table(Usersminus), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -378,19 +377,19 @@ func TestUsersDelete(t *testing.T) {
 		}
 
 		// not exist in usersprime
-		_, err = db.FindById(ctx, Table(UsersPrime), nonexistUser.id)
+		_, err = db.FindById(ctx, Table(Usersprime), nonexistUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// not exist in usersplus
-		_, err = db.FindById(ctx, Table(UsersPlus), nonexistUser.id)
+		_, err = db.FindById(ctx, Table(Usersplus), nonexistUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), nonexistUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), nonexistUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -405,7 +404,7 @@ func TestUsersDelete(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		primeUsers, err := db.Dump(ctx, Table(UsersPrime))
+		primeUsers, err := db.Dump(ctx, Table(Usersprime))
 		if err != nil {
 			t.Error(err)
 		}
@@ -434,26 +433,26 @@ func TestUsersDelete(t *testing.T) {
 		for rows.Next() {
 			var u User
 			if err := rows.Scan(&u.id, &u.name); err != nil {
-				color.Redf("Error reading user row: %v", err)
+				t.Error(err)
 			}
 			users = append(users, &u)
 		}
 
 		for _, user := range users {
 			// not exist in usersprime
-			_, err = db.FindById(ctx, Table(UsersPrime), user.id)
+			_, err = db.FindById(ctx, Table(Usersprime), user.id)
 			if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 				t.Errorf("(-want,+got):\n%s", diff)
 			}
 
 			// not exist in usersplus
-			_, err = db.FindById(ctx, Table(UsersPlus), user.id)
+			_, err = db.FindById(ctx, Table(Usersplus), user.id)
 			if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 				t.Errorf("(-want,+got):\n%s", diff)
 			}
 
 			// exist in usersminus
-			userminus, err := db.FindById(ctx, Table(UsersMinus), user.id)
+			userminus, err := db.FindById(ctx, Table(Usersminus), user.id)
 			if err != nil {
 				t.Error(err)
 			}
@@ -461,7 +460,7 @@ func TestUsersDelete(t *testing.T) {
 				t.Errorf("(-want,+got):\n%s", diff)
 			}
 		}
-		updatedPrimeUsers, err := db.Dump(ctx, Table(UsersPrime))
+		updatedPrimeUsers, err := db.Dump(ctx, Table(Usersprime))
 		if err != nil {
 			t.Error(err)
 		}
@@ -515,7 +514,7 @@ func TestUsersUpdate(t *testing.T) {
 		err = db.Update(ctx, newUser)
 
 		// exist in usersprime
-		userprime, err := db.FindById(ctx, Table(UsersPrime), newUser.id)
+		userprime, err := db.FindById(ctx, Table(Usersprime), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -524,7 +523,7 @@ func TestUsersUpdate(t *testing.T) {
 		}
 
 		// exist in usersplus
-		userplus, err := db.FindById(ctx, Table(UsersPrime), newUser.id)
+		userplus, err := db.FindById(ctx, Table(Usersprime), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -533,7 +532,7 @@ func TestUsersUpdate(t *testing.T) {
 		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), newUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), newUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -553,11 +552,8 @@ func TestUsersUpdate(t *testing.T) {
 	t.Run("UpdateNewInsert", func(t *testing.T) {
 		newUser := &User{6, "user6"}
 		err = db.Insert(ctx, newUser)
-		// check usersprime
-		insertUserprime, err := db.FindById(ctx, Table(UsersPrime), newUser.id)
-		if err != nil {
-			t.Error(err)
-		}
+		// newUser exists in usersprime
+		insertUserprime, err := db.FindById(ctx, Table(Usersprime), newUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -570,7 +566,7 @@ func TestUsersUpdate(t *testing.T) {
 		err = db.Update(ctx, updatedUser)
 
 		// exist in usersprime
-		userprime, err := db.FindById(ctx, Table(UsersPrime), updatedUser.id)
+		userprime, err := db.FindById(ctx, Table(Usersprime), updatedUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -579,7 +575,7 @@ func TestUsersUpdate(t *testing.T) {
 		}
 
 		// exist in usersplus
-		userplus, err := db.FindById(ctx, Table(UsersPrime), updatedUser.id)
+		userplus, err := db.FindById(ctx, Table(Usersprime), updatedUser.id)
 		if err != nil {
 			t.Error(err)
 		}
@@ -588,11 +584,10 @@ func TestUsersUpdate(t *testing.T) {
 		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), updatedUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), updatedUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
-
 	})
 
 	// TODO: Update a non-exist id should return error, however, the trigger will not
@@ -605,19 +600,19 @@ func TestUsersUpdate(t *testing.T) {
 		}
 
 		// not exist in usersprime
-		_, err = db.FindById(ctx, Table(UsersPrime), nonexistUser.id)
+		_, err = db.FindById(ctx, Table(Usersprime), nonexistUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// not exist in usersplus
-		_, err = db.FindById(ctx, Table(UsersPlus), nonexistUser.id)
+		_, err = db.FindById(ctx, Table(Usersplus), nonexistUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
 		// not exist in usersminus
-		_, err = db.FindById(ctx, Table(UsersMinus), nonexistUser.id)
+		_, err = db.FindById(ctx, Table(Usersminus), nonexistUser.id)
 		if diff := cmp.Diff(err.Error(), pgx.ErrNoRows.Error()); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
