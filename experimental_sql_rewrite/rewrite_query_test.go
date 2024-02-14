@@ -367,8 +367,8 @@ func TestUsersDelete(t *testing.T) {
 
 	})
 
-	// TODO: Delete a non-exist id should raise error, but since there is no row to trigger the
-	// trigger function, error will not be raised.
+	// Delete non-exist Id
+	// Expect no-op
 	t.Run("DeleteNonExistId", func(t *testing.T) {
 		nonexistUser := &User{10, "nonuser"}
 		err := db.Delete(ctx, nonexistUser)
@@ -590,8 +590,8 @@ func TestUsersUpdate(t *testing.T) {
 		}
 	})
 
-	// TODO: Update a non-exist id should return error, however, the trigger will not
-	// be triggered if there is no row
+	// Update non-exist Id
+	// Expect no-op
 	t.Run("UpdateNonExist", func(t *testing.T) {
 		nonexistUser := &User{10, "nonuser"}
 		err := db.Update(ctx, nonexistUser)
