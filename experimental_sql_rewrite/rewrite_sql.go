@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/gookit/color"
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
@@ -27,20 +26,13 @@ type User struct {
 	name string
 }
 
-// UserRepository is a SQL database repository for users
 type Database struct {
 	connPool *pgxpool.Pool
 }
 
-// NewUserRepository creates a new SQL database repository for users
 func NewDatabase(ctx context.Context, connPool *pgxpool.Pool) *Database {
 	// Create tables
 	if _, err := connPool.Exec(ctx, `
-		DROP VIEW IF EXISTS UsersPrime;
-		DROP TABLE IF EXISTS Users;
-		DROP TABLE IF EXISTS UsersPlus;
-		DROP TABLE IF EXISTS UsersMinus;
-
 		CREATE TABLE Users(id INT PRIMARY KEY, name VARCHAR(80));
 		CREATE TABLE UsersPlus(id INT PRIMARY KEY, name VARCHAR(80));
 		CREATE TABLE UsersMinus(id INT PRIMARY KEY, name VARCHAR(80));
@@ -200,7 +192,7 @@ func (d *Database) Dump(ctx context.Context, table Table) ([]*User, error) {
 	for rows.Next() {
 		var u User
 		if err := rows.Scan(&u.id, &u.name); err != nil {
-			color.Redf("Error reading user row: %v", err)
+			return nil, err
 		}
 		users = append(users, &u)
 	}
@@ -225,10 +217,10 @@ func (d *Database) Update(ctx context.Context, user *User) error {
 // print out all tables
 func (d *Database) Print(ctx context.Context) error {
 	for _, table := range []string{
-		"Users",      // Users(id, name)
-		"UsersPrime", // UsersPrime(id, name)
-		"UsersPlus",  // UsersPrimePlus(id, name)
-		"UsersMinus", // UsersMinus(id, name)
+		"Users",
+		"UsersPrime",
+		"UsersPlus",
+		"UsersMinus",
 	} {
 		fmt.Println(table)
 		q := fmt.Sprintf("SELECT * FROM %s;", table)

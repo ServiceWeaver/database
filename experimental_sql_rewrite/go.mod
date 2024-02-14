@@ -7,9 +7,7 @@ require (
 	github.com/gookit/color v1.5.4
 	github.com/jackc/pgx v3.6.2+incompatible
 	github.com/jackc/pgx/v4 v4.18.1
-	github.com/matryer/is v1.4.1
 	github.com/testcontainers/testcontainers-go v0.27.0
-	google.golang.org/protobuf v1.31.0
 )
 
 require (
@@ -68,4 +66,5 @@ require (
 	golang.org/x/tools v0.10.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231030173426-d783a09b4405 // indirect
 	google.golang.org/grpc v1.59.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 )
