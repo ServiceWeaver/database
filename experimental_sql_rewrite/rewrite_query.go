@@ -91,16 +91,12 @@ func (d *Database) createDeleteTrigger(ctx context.Context) error {
 	AS $$
 	BEGIN
 	RAISE NOTICE 'Trigger redirect_delete executed for ID %', OLD.id;
-	IF NOT EXISTS (SELECT * FROM USERSPRIME WHERE id = OLD.id) THEN
-		RAISE EXCEPTION 'id does not exist %', OLD.id;
-	ELSE
-		IF EXISTS (SELECT * FROM usersplus WHERE ID = OLD.id) THEN
-			DELETE FROM usersplus WHERE id = OLD.id;
-		END IF;
-		INSERT INTO usersminus (name, id)
-		VALUES (OLD.name, OLD.id);
-		RETURN OLD;
+	IF EXISTS (SELECT * FROM usersplus WHERE ID = OLD.id) THEN
+		DELETE FROM usersplus WHERE id = OLD.id;
 	END IF;
+	INSERT INTO usersminus (name, id)
+	VALUES (OLD.name, OLD.id);
+	RETURN OLD;
 	END;
 	$$;
 
@@ -121,16 +117,12 @@ func (d *Database) createUpdateTrigger(ctx context.Context) error {
 	AS $$
 	BEGIN
 	RAISE NOTICE 'Trigger redirect_update executed for ID %', NEW.id;
-	IF NOT EXISTS (SELECT * FROM USERSPRIME WHERE id=NEW.id) THEN
-		RAISE EXCEPTION 'ID does not exist %', NEW.id;
-	ELSE
-		IF NOT EXISTS (SELECT * FROM usersplus WHERE ID = OLD.id) THEN
-			INSERT INTO usersplus SELECT * FROM USERSPRIME where id=OLD.id;
-		END IF;
-		UPDATE usersplus SET name = NEW.name WHERE id = NEW.id;
-		RETURN NEW;
-		END IF;
-		END;
+	IF NOT EXISTS (SELECT * FROM usersplus WHERE ID = OLD.id) THEN
+		INSERT INTO usersplus SELECT * FROM USERSPRIME where id=OLD.id;
+	END IF;
+	UPDATE usersplus SET name = NEW.name WHERE id = NEW.id;
+	RETURN NEW;
+	END;
 	$$;
 
 	CREATE OR REPLACE TRIGGER redirect_update_trigger
