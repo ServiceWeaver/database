@@ -2,49 +2,40 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/jackc/pgx"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func SetupTestDatabase() (testcontainers.Container, *pgxpool.Pool, error) {
-	containerReq := testcontainers.ContainerRequest{
-		Image:        "postgres:latest",
-		ExposedPorts: []string{"5432/tcp"},
-		WaitingFor:   wait.ForListeningPort("5432/tcp"),
-		Env: map[string]string{
-			"POSTGRES_DB":       "testdb",
-			"POSTGRES_PASSWORD": "postgres",
-			"POSTGRES_USER":     "postgres",
-		},
-	}
-	dbContainer, err := testcontainers.GenericContainer(
-		context.Background(),
-		testcontainers.GenericContainerRequest{
-			ContainerRequest: containerReq,
-			Started:          true,
-		})
-	if err != nil {
-		return nil, nil, err
-	}
-	port, err := dbContainer.MappedPort(context.Background(), "5432")
-	if err != nil {
-		return nil, nil, err
-	}
-	host, err := dbContainer.Host(context.Background())
+func SetupTestDatabase(ctx context.Context) (testcontainers.Container, *pgxpool.Pool, error) {
+	dbContainer, err := postgres.RunContainer(
+		ctx,
+		testcontainers.WithImage("docker.io/postgres:16-alpine"),
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("postgres"),
+		postgres.WithPassword("postgres"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(5*time.Second)),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	dbURI := fmt.Sprintf("postgres://postgres:postgres@%v:%v/testdb", host, port.Port())
+	dbURL, err := dbContainer.ConnectionString(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	connPool, err := pgxpool.Connect(context.Background(), dbURI)
+	connPool, err := pgxpool.Connect(ctx, dbURL)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -56,7 +47,7 @@ func TestUsersInsert(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup database
-	dbContainer, connPool, err := SetupTestDatabase()
+	dbContainer, connPool, err := SetupTestDatabase(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -225,7 +216,7 @@ func TestUsersDelete(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup database
-	dbContainer, connPool, err := SetupTestDatabase()
+	dbContainer, connPool, err := SetupTestDatabase(ctx)
 	if err != nil {
 		t.Error(err)
 	}
@@ -435,7 +426,7 @@ func TestUsersUpdate(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup database
-	dbContainer, connPool, err := SetupTestDatabase()
+	dbContainer, connPool, err := SetupTestDatabase(ctx)
 	if err != nil {
 		t.Error(err)
 	}
