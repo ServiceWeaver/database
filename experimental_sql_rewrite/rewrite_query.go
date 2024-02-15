@@ -35,7 +35,7 @@ func NewDatabase(ctx context.Context, connPool *pgxpool.Pool) *Database {
 	if _, err := connPool.Exec(ctx, `
 		CREATE TABLE Users(id INT PRIMARY KEY, name VARCHAR(80));
 		CREATE TABLE Usersplus(id INT PRIMARY KEY, name VARCHAR(80));
-		CREATE TABLE Usersminus(id INT PRIMARY KEY, name VARCHAR(80));
+		CREATE TABLE Usersminus(id INT PRIMARY KEY);
 
 		CREATE VIEW Usersprime AS
 		SELECT *
@@ -64,9 +64,7 @@ func (d *Database) createInsertTrigger(ctx context.Context) error {
 	IF EXISTS (SELECT * FROM USERSPRIME WHERE id = NEW.id) THEN
 		RAISE EXCEPTION 'id already exists %', OLD.id;
 	ELSE
-		IF EXISTS (SELECT * FROM usersminus WHERE id = NEW.id) THEN
-			DELETE FROM usersminus WHERE id=NEW.id;
-		END IF;
+		DELETE FROM usersminus WHERE id=NEW.id;
 		INSERT INTO usersplus (name, id)
 		VALUES (NEW.name, NEW.id);
 		RETURN NEW;
@@ -94,8 +92,8 @@ func (d *Database) createDeleteTrigger(ctx context.Context) error {
 	IF EXISTS (SELECT * FROM usersplus WHERE ID = OLD.id) THEN
 		DELETE FROM usersplus WHERE id = OLD.id;
 	END IF;
-	INSERT INTO usersminus (name, id)
-	VALUES (OLD.name, OLD.id);
+	INSERT INTO usersminus (id)
+	VALUES (OLD.id);
 	RETURN OLD;
 	END;
 	$$;
@@ -146,8 +144,6 @@ func (d *Database) CreateTriggers(ctx context.Context) {
 	if err := d.createUpdateTrigger(ctx); err != nil {
 		log.Fatal("failed to create update trigger", err)
 	}
-
-	return
 }
 
 func (d *Database) FindById(ctx context.Context, table Table, uid int) (*User, error) {
@@ -157,24 +153,37 @@ func (d *Database) FindById(ctx context.Context, table Table, uid int) (*User, e
 	var (
 		id   int
 		name string
+		user *User
 	)
 
-	err := row.Scan(&id, &name)
-	if err != nil {
-		return nil, err
+	if table == Usersminus {
+		err := row.Scan(&id)
+		if err != nil {
+			return nil, err
+		}
+
+		user = &User{
+			id: id,
+		}
+	} else {
+		err := row.Scan(&id, &name)
+		if err != nil {
+			return nil, err
+		}
+
+		user = &User{
+			id:   id,
+			name: name,
+		}
 	}
 
-	user := &User{
-		id:   id,
-		name: name,
-	}
 	return user, nil
 }
 
 func (d *Database) Dump(ctx context.Context, table Table) ([]*User, error) {
 	var users []*User
 
-	query := fmt.Sprintf("SELECT * FROM %s", table)
+	query := fmt.Sprintf("SELECT * FROM %s ORDER BY id", table)
 	rows, err := d.connPool.Query(ctx, query)
 	if err != nil {
 		return users, err
@@ -222,12 +231,20 @@ func (d *Database) Print(ctx context.Context) error {
 		}
 		defer rows.Close()
 		for rows.Next() {
-			var id int
-			var name string
-			if err := rows.Scan(&id, &name); err != nil {
-				return err
+			if table == Usersminus.String() {
+				var id int
+				if err := rows.Scan(&id); err != nil {
+					return err
+				}
+				fmt.Println(id)
+			} else {
+				var id int
+				var name string
+				if err := rows.Scan(&id, &name); err != nil {
+					return err
+				}
+				fmt.Printf("%d: %q\n", id, name)
 			}
-			fmt.Printf("%d: %q\n", id, name)
 
 		}
 		if err := rows.Err(); err != nil {

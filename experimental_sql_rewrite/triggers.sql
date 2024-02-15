@@ -10,8 +10,7 @@ CREATE TABLE IF NOT EXISTS usersplus (
 );
 
 CREATE TABLE IF NOT EXISTS usersminus (
-    id        INT PRIMARY KEY,
-    name varchar(80)
+    id        INT PRIMARY KEY
 );
 
 INSERT INTO users VALUES (1,'user1');
@@ -61,11 +60,9 @@ CREATE OR REPLACE FUNCTION redirect_delete()
 AS $$
 BEGIN
  RAISE NOTICE 'Trigger redirect_delete executed for ID %', OLD.id; 
-  IF EXISTS (SELECT * FROM usersplus WHERE ID = OLD.id) THEN
-    DELETE FROM usersplus WHERE id = OLD.id;
-  END IF;
-  INSERT INTO usersminus (name, id) 
-  VALUES (OLD.name, OLD.id);
+  DELETE FROM usersplus WHERE id = OLD.id;
+  INSERT INTO usersminus (id) 
+  VALUES (OLD.id);
   RETURN OLD;
 END;
 $$;
