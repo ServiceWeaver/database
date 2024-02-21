@@ -688,16 +688,13 @@ func TestNoPrimaryKeyOperations(t *testing.T) {
 			t.Error(err)
 		}
 
-		for _,user := range origUsers {
-			updatedUser := &User{user.id+1, user.name}
-			
-			// updated user exist in usersprime
-			checkExists(t, ctx, updatedUser, Usersprime)
+		for _, user := range origUsers {
+			updatedUser := &User{user.id + 1, user.name}
 
 			// updated user exist in usersprime
 			checkExists(t, ctx, updatedUser, Usersprime)
 
-			// exist in usersplus
+			// updated exist in usersplus
 			checkExists(t, ctx, updatedUser, Usersplus)
 
 			// orig user not exist in usersprime
@@ -722,9 +719,9 @@ func TestNoPrimaryKeyOperations(t *testing.T) {
 			t.Error(err)
 		}
 
-		for _,user := range origUsers {
-			updatedUser := &User{user.id-1, user.name}
-			
+		for _, user := range origUsers {
+			updatedUser := &User{user.id - 1, user.name}
+
 			// updatedUser exist in usersprime
 			checkExists(t, ctx, updatedUser, Usersprime)
 
@@ -741,13 +738,13 @@ func TestNoPrimaryKeyOperations(t *testing.T) {
 	})
 
 	t.Run("DeleteDuplicateIds", func(t *testing.T) {
-		deletedUser := &User{1,"user1"}
+		deletedUser := &User{1, "user1"}
 
-		err = db.Delete(ctx,deletedUser)
+		err = db.Delete(ctx, deletedUser)
 		if err != nil {
 			t.Error(err)
 		}
-			
+
 		// deletedUser not exist in usersprime
 		checkMissing(t, ctx, deletedUser, Usersprime)
 
@@ -761,26 +758,27 @@ func TestNoPrimaryKeyOperations(t *testing.T) {
 	})
 
 	t.Run("DeleteInsertDeleteSameRows", func(t *testing.T) {
-		deletedUser := &User{1,"user1"}
+		deletedUser := &User{1, "user1"}
 		deletedUserCnt := 0
-		origUsersPrime,err := db.Dump(ctx,Usersprime)
+		origUsersPrime, err := db.Dump(ctx, Usersprime)
 		if err != nil {
 			t.Error(err)
 		}
-		for _,user := range origUsersPrime{
-			if user.id == deletedUser.id && user.name == deletedUser.name{
-				deletedUserCnt+=1
+		for _, user := range origUsersPrime {
+			if user.id == deletedUser.id && user.name == deletedUser.name {
+				deletedUserCnt += 1
 			}
 		}
-		if diff := cmp.Diff(3, deletedUserCnt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
+
+		if got, want := deletedUserCnt, 3; got != want {
+			t.Errorf("deleted user count: got %d, want %d", got, want)
 		}
 
-		err = db.Delete(ctx,deletedUser)
+		err = db.Delete(ctx, deletedUser)
 		if err != nil {
 			t.Error(err)
 		}
-			
+
 		// deletedUser not exist in usersprime
 		checkMissing(t, ctx, deletedUser, Usersprime)
 
@@ -791,30 +789,30 @@ func TestNoPrimaryKeyOperations(t *testing.T) {
 		checkExists(t, ctx, deletedUser, Usersminus)
 
 		// insert twice
-		err = db.Insert(ctx,deletedUser)
+		err = db.Insert(ctx, deletedUser)
 		if err != nil {
 			t.Error(err)
 		}
-		err = db.Insert(ctx,deletedUser)
+		err = db.Insert(ctx, deletedUser)
 		if err != nil {
 			t.Error(err)
 		}
 
 		insertedUserCnt := 0
-		updatedUsersPrime,err := db.Dump(ctx,Usersprime)
+		updatedUsersPrime, err := db.Dump(ctx, Usersprime)
 		if err != nil {
 			t.Error(err)
 		}
-		for _,user := range updatedUsersPrime{
-			if user.id == deletedUser.id && user.name == deletedUser.name{
-				insertedUserCnt+=1
+		for _, user := range updatedUsersPrime {
+			if user.id == deletedUser.id && user.name == deletedUser.name {
+				insertedUserCnt += 1
 			}
 		}
 
-		if diff := cmp.Diff(2, insertedUserCnt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
+		if got, want := insertedUserCnt, 2; got != want {
+			t.Errorf("deleted user count: got %d, want %d", got, want)
 		}
-			
+
 		// deletedUser exist in usersprime
 		checkExists(t, ctx, deletedUser, Usersprime)
 
@@ -824,7 +822,7 @@ func TestNoPrimaryKeyOperations(t *testing.T) {
 		// deleted user exist in usersminus
 		checkExists(t, ctx, deletedUser, Usersminus)
 
-		err = db.Delete(ctx,deletedUser)
+		err = db.Delete(ctx, deletedUser)
 		if err != nil {
 			t.Error(err)
 		}
