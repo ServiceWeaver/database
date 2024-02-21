@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
      ssn       CHAR(11)    NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS ON users (accountid);
-CREATE INDEX IF NOT EXISTS ON users (username);
+CREATE INDEX IF NOT EXISTS accountIdIdx ON users (accountid);
+CREATE INDEX IF NOT EXISTS usernameIdx ON users (username);
 
 -- contacts stores the contacts for every user. A contact is a bank account to
 -- which a user can send funds. For example, if Alice has Bob as a contact,
@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   FOREIGN KEY (username) REFERENCES users(username)
 );
 
-CREATE INDEX IF NOT EXISTS ON contacts (username);
+CREATE INDEX IF NOT EXISTS contactNameIdx ON contacts (username);
 
 -- Populate the users table.
 INSERT INTO users VALUES

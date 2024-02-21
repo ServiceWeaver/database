@@ -24,8 +24,8 @@ CREATE TABLE transactions (
   timestamp      TIMESTAMP NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS ON transactions (from_acct, from_route, timestamp);
-CREATE INDEX IF NOT EXISTS ON transactions (to_acct, to_route, timestamp);
+CREATE INDEX IF NOT EXISTS fromIdx ON transactions (from_acct, from_route, timestamp);
+CREATE INDEX IF NOT EXISTS toIdx ON transactions (to_acct, to_route, timestamp);
 
 -- transactions is an append-only ledger. Prevent updates and deletes.
 CREATE RULE PREVENT_UPDATE AS
