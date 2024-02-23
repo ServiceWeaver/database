@@ -6,7 +6,7 @@ ALTER TABLE transactions RENAME TO transactionsprod;
 
 -- create transactions+
 CREATE TABLE transactionsplus (
-  transaction_id BIGINT,
+  transaction_id BIGINT    NOT NULL,
   from_acct      CHAR(12)  NOT NULL,
   to_acct        CHAR(12)  NOT NULL,
   from_route     CHAR(9)   NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE transactionsplus (
 
 -- create transactions-
 CREATE TABLE transactionsminus (
-  transaction_id BIGINT,
+  transaction_id BIGINT    NOT NULL,
   from_acct      CHAR(12)  NOT NULL,
   to_acct        CHAR(12)  NOT NULL,
   from_route     CHAR(9)   NOT NULL,

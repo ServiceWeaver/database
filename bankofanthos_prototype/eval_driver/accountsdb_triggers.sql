@@ -9,7 +9,7 @@ ALTER TABLE users RENAME TO usersprod;
 
 -- create users+
 CREATE TABLE usersplus (
-     accountid CHAR(12),
+     accountid CHAR(12)    NOT NULL,
      username  VARCHAR(64) NOT NULL,
      passhash  BYTEA       NOT NULL,
      firstname VARCHAR(64) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE usersplus (
 
 -- create users-
 CREATE TABLE  usersminus (
-    accountid CHAR(12),
+    accountid CHAR(12)    NOT NULL,
     username  VARCHAR(64) NOT NULL,
     passhash  BYTEA       NOT NULL,
     firstname VARCHAR(64) NOT NULL,
@@ -158,6 +158,9 @@ CREATE OR REPLACE FUNCTION contacts_redirect_insert()
 AS $$
 BEGIN
  RAISE NOTICE 'Trigger contacts_redirect_insert executed for username %', NEW.username;
+ IF NOT EXISTS (SELECT * FROM users WHERE username = NEW.username) THEN
+  RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in users table';
+ END IF;
  INSERT INTO contactsplus (username,label,account_num,routing_num,is_external) 
  VALUES (NEW.username, NEW.label, NEW.account_num, NEW.routing_num, NEW.is_external);
  RETURN NEW;
@@ -195,6 +198,9 @@ CREATE OR REPLACE FUNCTION contacts_redirect_update()
 AS $$
 BEGIN
   RAISE NOTICE 'Trigger contacts_redirect_update executed for new username % old username %', NEW.username,OLD.username;
+  IF NOT EXISTS (SELECT * FROM users WHERE username = NEW.username) THEN
+   RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in users table';
+  END IF;
   INSERT INTO contactsminus (username,label,account_num,routing_num,is_external) VALUES (OLD.username, OLD.label,OLD.account_num,OLD.routing_num,OLD.is_external);
   INSERT INTO contactsplus (username,label,account_num,routing_num,is_external) VALUES (NEW.username, NEW.label, NEW.account_num, NEW.routing_num, NEW.is_external);
   RETURN NEW;
