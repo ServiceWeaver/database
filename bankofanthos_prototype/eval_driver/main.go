@@ -148,7 +148,7 @@ func main() {
 	runCnt := 0
 
 	// cloned prod database
-	clonedDb, err := cloneDatabase("replica", "main")
+	clonedDb, err := cloneDatabase("replica", "main", false)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
@@ -161,7 +161,7 @@ func main() {
 	}
 
 	// run baseline service
-	clonedDbB, err := cloneDatabase("cloneB", clonedDb.branch)
+	clonedDbB, err := cloneDatabase("cloneB", clonedDb.branch, false)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
@@ -174,7 +174,7 @@ func main() {
 	baselineService.run(listOfReqs1)
 
 	// run baseline service2
-	clonedDbB2, err := cloneDatabase("cloneB2", clonedDb.branch)
+	clonedDbB2, err := cloneDatabase("cloneB2", clonedDb.branch, false)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
@@ -195,7 +195,7 @@ func main() {
 	}
 
 	// run experimental service
-	clonedDbE, err := cloneDatabase("cloneE", clonedDb.branch)
+	clonedDbE, err := cloneDatabase("cloneE", clonedDb.branch, true)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
@@ -225,7 +225,7 @@ func main() {
 	}
 
 	// run requests on both baseline and experiental
-	clonedDbB1E1, err := cloneDatabase("cloneB1E1", clonedDb.branch)
+	clonedDbB1E1, err := cloneDatabase("cloneB1E1", clonedDb.branch, true)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
@@ -253,7 +253,7 @@ func main() {
 	}
 
 	// run requests on both experiental and baseline
-	clonedDbE1B1, err := cloneDatabase("cloneE1B1", clonedDb.branch)
+	clonedDbE1B1, err := cloneDatabase("cloneE1B1", clonedDb.branch, true)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
