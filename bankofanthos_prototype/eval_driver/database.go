@@ -59,13 +59,13 @@ func getDatabaseByBranchName(branchName string) (database, error) {
 
 // cloneDatabase clones a database from ancestorBranchName if it does not exist.
 func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool) (database, error) {
-	CloneDdl := database{}
+	db := database{}
 
 	// running database fork command under neon directory
 	currentDir, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting current directory: %v\n", err)
-		return CloneDdl, err
+		return db, err
 	}
 
 	home, _ := os.UserHomeDir()
@@ -73,7 +73,7 @@ func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool
 
 	if err != nil {
 		fmt.Printf("Error changing directory: %v\n", err)
-		return CloneDdl, err
+		return db, err
 	}
 	defer func() {
 		err := os.Chdir(currentDir)
@@ -85,7 +85,7 @@ func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool
 
 	existingDb, err := getDatabaseByBranchName(branchName)
 	if err != nil {
-		return CloneDdl, nil
+		return db, nil
 	}
 	if existingDb.branch == branchName && existingDb.port != "" {
 		return existingDb, nil
@@ -96,39 +96,39 @@ func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool
 
 	err = cloneCmd.Run()
 	if err != nil {
-		return CloneDdl, fmt.Errorf("failed to create a new branch: %v", err)
+		return db, fmt.Errorf("failed to create a new branch: %v", err)
 	}
 
 	// create progressql on that branch
 	createPostgresCmd := exec.Command("cargo", "neon", "endpoint", "create", branchName, "--branch-name", branchName)
 	err = createPostgresCmd.Run()
 	if err != nil {
-		return CloneDdl, fmt.Errorf("failed to create a postgres on the branch: %v", err)
+		return db, fmt.Errorf("failed to create a postgres on the branch: %v", err)
 	}
 
 	// start postgresql on that branch
 	startCmd := exec.Command("cargo", "neon", "endpoint", "start", branchName)
 	err = startCmd.Run()
 	if err != nil {
-		return CloneDdl, fmt.Errorf("failed to start postgres on the branch: %v", err)
+		return db, fmt.Errorf("failed to start postgres on the branch: %v", err)
 	}
 
-	CloneDdl, err = getDatabaseByBranchName(branchName)
+	db, err = getDatabaseByBranchName(branchName)
 	if err != nil {
-		return CloneDdl, err
+		return db, err
 	}
 
 	if switchCloning {
 		err = os.Chdir(currentDir)
 		if err != nil {
 			fmt.Printf("Error changing back to original directory: %v\n", err)
-			return CloneDdl, err
+			return db, err
 		}
-		err = switchRPlusRMinusCloning(CloneDdl.port)
-		return CloneDdl, err
+		err = switchRPlusRMinusCloning(db.port)
+		return db, err
 	}
 
-	return CloneDdl, err
+	return db, err
 }
 
 func switchRPlusRMinusCloning(dbPort string) error {

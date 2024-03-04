@@ -1,3 +1,4 @@
+// This file creates triggers for a cloned table to redirect queries
 package clonedatabase
 
 import (
@@ -80,7 +81,6 @@ func (q *QueryRewriter) createInsertTriggers(ctx context.Context) error {
 	}
 
 	// TODO: make it more generic way for auto-generate id
-	// if it has id generator.
 	if idGeneratorQuery != "" {
 		storedProcedureQuery += idGeneratorQuery
 	}
@@ -185,7 +185,7 @@ func (q *QueryRewriter) createUpdateTriggers(ctx context.Context) error {
 func (q *QueryRewriter) createDeleteTriggers(ctx context.Context) error {
 	var cols []string
 	var oldCols []string
-	for colname, _ := range q.table.Plus.Cols {
+	for colname := range q.table.Plus.Cols {
 		cols = append(cols, colname)
 		oldCols = append(oldCols, "OLD."+colname)
 	}

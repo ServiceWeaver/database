@@ -1,3 +1,5 @@
+// This file creates R+/R-/R' clone database based on database metadata
+
 package clonedatabase
 
 import (
@@ -72,7 +74,6 @@ func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*Clo
 	}
 	view, err := c.createView(ctx, snapshot)
 	if err != nil {
-		fmt.Printf("[DEBUG] failed to create views, %s", err)
 		return nil, fmt.Errorf("failed to create views, %s", err)
 	}
 
@@ -85,6 +86,7 @@ func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*Clo
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply rules, %s", err)
 	}
+
 	// at the end, rename original snapshot to tablesnapshot and view as the original snapshot name
 	originalName := snapshot.Name
 	err = c.alterTableName(ctx, snapshot.Name+"snapshot", snapshot)
@@ -133,6 +135,7 @@ func (c *CloneDdl) alterViewName(ctx context.Context, newName string, view *View
 
 func (c *CloneDdl) dropTable(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
+
 	_, err := c.Database.connPool.Exec(ctx, query)
 	if err != nil {
 		return err
@@ -210,15 +213,13 @@ func (c *CloneDdl) createView(ctx context.Context, prodTable *Table) (*View, err
 	}
 
 	viewQuery := fmt.Sprintf(`
-	DROP VIEW IF EXISTS %s;
-
 	CREATE  VIEW %s AS
 	SELECT %s FROM %s
 	UNION ALL
 	SELECT %s FROM %s
 	EXCEPT ALL
 	SELECT %s FROM %s;
-	`, view.Name, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), prodTable.Name+"plus", strings.Join(colnames, ", "), prodTable.Name+"minus")
+	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), prodTable.Name+"plus", strings.Join(colnames, ", "), prodTable.Name+"minus")
 
 	_, err := c.Database.connPool.Exec(ctx, viewQuery)
 	if err != nil {

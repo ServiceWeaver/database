@@ -1,3 +1,4 @@
+// This file defines database struct and get database matadata
 package clonedatabase
 
 import (
@@ -38,7 +39,7 @@ type Reference struct {
 	BeRefedColumnName    string
 	ForeignKeyTableName  string
 	ForeignKeyColumnName string
-	Action               string // empty is default to no action
+	Action               string // set default to no action
 }
 
 // a TableName(ColumnName) has a foreign key constraint which refers another RefTableName(RefColumnName)
@@ -48,7 +49,7 @@ type ForeignKeyConstraint struct {
 	ColumnName     string
 	RefTableName   string
 	RefColumnName  string
-	Action         string // empty is default to no action
+	Action         string // set default to no action
 }
 
 type Rule struct {

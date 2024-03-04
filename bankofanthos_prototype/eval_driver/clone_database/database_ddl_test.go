@@ -129,9 +129,24 @@ func TestCreateCloneDatabase(t *testing.T) {
 		if diff := cmp.Diff(expectedMinus, minusTable, colOpt, idxOpt, ruleOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
+
+		err = CloneDdl.dropTable(ctx, "usersplus")
+		if err != nil {
+			t.Error(err)
+		}
+
+		err = CloneDdl.dropTable(ctx, "usersminus")
+		if err != nil {
+			t.Error(err)
+		}
 	})
 
 	t.Run("CreateView", func(t *testing.T) {
+		_, _, err := CloneDdl.createPlusMinusTable(ctx, CloneDdl.Database.Tables["users"])
+		if err != nil {
+			t.Error(err)
+		}
+
 		view, err := CloneDdl.createView(ctx, CloneDdl.Database.Tables["users"])
 		if err != nil {
 			t.Error(err)
@@ -162,13 +177,24 @@ func TestCreateCloneDatabase(t *testing.T) {
 		if diff := cmp.Diff(expectedView, gotView, colOpt, idxOpt, ruleOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
+
+		err = CloneDdl.dropView(ctx, view.Name)
+		if err != nil {
+			t.Error(err)
+		}
+		err = CloneDdl.dropTable(ctx, "usersplus")
+		if err != nil {
+			t.Error(err)
+		}
+
+		err = CloneDdl.dropTable(ctx, "usersminus")
+		if err != nil {
+			t.Error(err)
+		}
 	})
 
-	err = CloneDdl.Close(ctx)
-	if err != nil {
-		t.Error(err)
-	}
 	t.Run("CreateClonedTable", func(t *testing.T) {
+
 		CloneDdl, err = NewCloneDdl(ctx, database)
 		if err != nil {
 			t.Error(err)
@@ -177,7 +203,6 @@ func TestCreateCloneDatabase(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		defer CloneDdl.Close(ctx)
 
 		if got, want := len(CloneDdl.ClonedTables), 2; got != want {
 			t.Errorf("Cloned table count: got %d, want %d", got, want)
