@@ -1,6 +1,8 @@
 package main
 
 import (
+	clonedatabase "bankofanthos_prototype/eval_driver/clone_database"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -56,14 +58,14 @@ func getDatabaseByBranchName(branchName string) (database, error) {
 }
 
 // cloneDatabase clones a database from ancestorBranchName if it does not exist.
-func cloneDatabase(branchName, ancestorBranchName string, switchCloning bool) (database, error) {
-	clonedDatabase := database{}
+func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool) (database, error) {
+	CloneDdl := database{}
 
 	// running database fork command under neon directory
 	currentDir, err := os.Getwd()
 	if err != nil {
 		fmt.Printf("Error getting current directory: %v\n", err)
-		return clonedDatabase, err
+		return CloneDdl, err
 	}
 
 	home, _ := os.UserHomeDir()
@@ -71,7 +73,7 @@ func cloneDatabase(branchName, ancestorBranchName string, switchCloning bool) (d
 
 	if err != nil {
 		fmt.Printf("Error changing directory: %v\n", err)
-		return clonedDatabase, err
+		return CloneDdl, err
 	}
 	defer func() {
 		err := os.Chdir(currentDir)
@@ -83,7 +85,7 @@ func cloneDatabase(branchName, ancestorBranchName string, switchCloning bool) (d
 
 	existingDb, err := getDatabaseByBranchName(branchName)
 	if err != nil {
-		return clonedDatabase, nil
+		return CloneDdl, nil
 	}
 	if existingDb.branch == branchName && existingDb.port != "" {
 		return existingDb, nil
@@ -94,57 +96,71 @@ func cloneDatabase(branchName, ancestorBranchName string, switchCloning bool) (d
 
 	err = cloneCmd.Run()
 	if err != nil {
-		return clonedDatabase, fmt.Errorf("failed to create a new branch: %v", err)
+		return CloneDdl, fmt.Errorf("failed to create a new branch: %v", err)
 	}
 
 	// create progressql on that branch
 	createPostgresCmd := exec.Command("cargo", "neon", "endpoint", "create", branchName, "--branch-name", branchName)
 	err = createPostgresCmd.Run()
 	if err != nil {
-		return clonedDatabase, fmt.Errorf("failed to create a postgres on the branch: %v", err)
+		return CloneDdl, fmt.Errorf("failed to create a postgres on the branch: %v", err)
 	}
 
 	// start postgresql on that branch
 	startCmd := exec.Command("cargo", "neon", "endpoint", "start", branchName)
 	err = startCmd.Run()
 	if err != nil {
-		return clonedDatabase, fmt.Errorf("failed to start postgres on the branch: %v", err)
+		return CloneDdl, fmt.Errorf("failed to start postgres on the branch: %v", err)
 	}
 
-	clonedDatabase, err = getDatabaseByBranchName(branchName)
+	CloneDdl, err = getDatabaseByBranchName(branchName)
 	if err != nil {
-		return clonedDatabase, err
+		return CloneDdl, err
 	}
 
 	if switchCloning {
 		err = os.Chdir(currentDir)
 		if err != nil {
 			fmt.Printf("Error changing back to original directory: %v\n", err)
-			return clonedDatabase, err
+			return CloneDdl, err
 		}
-		err = switchRPlusRMinusCloning(clonedDatabase.port)
-		return clonedDatabase, err
+		err = switchRPlusRMinusCloning(CloneDdl.port)
+		return CloneDdl, err
 	}
 
-	return clonedDatabase, err
+	return CloneDdl, err
 }
 
 func switchRPlusRMinusCloning(dbPort string) error {
 	fmt.Printf("Switching to R+/R- cloning database at port %s\n", dbPort)
-	triggerPostgresdbCmd := exec.Command("psql", "-p", dbPort, "-h", "127.0.0.1", "-U", "admin", "postgresdb", "-f", "postgresdb_triggers.sql")
+	postgresdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/postgresdb?sslmode=disable", dbPort)
 
-	out, err := triggerPostgresdbCmd.CombinedOutput()
-	fmt.Printf("triggerPostgresdbCmd output is %s\n", out)
-	if err != nil {
-		return fmt.Errorf("failed to dump postgresdb: %v", err)
-	}
+	// triggerPostgresdbCmd := exec.Command("psql", postgresdbUrl, "-f", "postgresdb_triggers.sql")
 
-	triggerAccountsdbCmd := exec.Command("psql", "-p", dbPort, "-h", "127.0.0.1", "-U", "admin", "accountsdb", "-f", "accountsdb_triggers.sql")
-	out, err = triggerAccountsdbCmd.CombinedOutput()
-	fmt.Printf("triggerAccountsdbCmd output is %s\n", out)
+	// out, err := triggerPostgresdbCmd.CombinedOutput()
+	// fmt.Printf("triggerPostgresdbCmd output is %s\n", out)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to dump postgresdb: %v", err)
+	// }
+	ctx := context.Background()
+	postgresCloneDatabase, err := clonedatabase.NewClonedDatabase(ctx, postgresdbUrl)
 	if err != nil {
-		return fmt.Errorf("failed to dump accountsdb: %v", err)
+		return err
 	}
+	defer postgresCloneDatabase.Close()
+
+	accountdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/accountsdb?sslmode=disable", dbPort)
+	// triggerAccountsdbCmd := exec.Command("psql", accountdbUrl, "-f", "accountsdb_triggers.sql")
+	// out, err := triggerAccountsdbCmd.CombinedOutput()
+	// fmt.Printf("triggerAccountsdbCmd output is %s\n", out)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to dump accountsdb: %v", err)
+	// }
+	accountsCloneDatabase, err := clonedatabase.NewClonedDatabase(ctx, accountdbUrl)
+	if err != nil {
+		return err
+	}
+	defer accountsCloneDatabase.Close()
 
 	return nil
 }
