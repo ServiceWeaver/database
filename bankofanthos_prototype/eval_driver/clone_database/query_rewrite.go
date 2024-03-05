@@ -47,8 +47,7 @@ func (q *QueryRewriter) createInsertTriggers(ctx context.Context) error {
 			idGeneratorQuery += fmt.Sprintf(`
 	IF NEW.%s IS NULL THEN
 		NEW.%s := (SELECT COALESCE(MAX(%s), %d) FROM %s) + %d;
-	END IF;
-	`, colname, colname, colname, col.IdGenerator.IdentityMinimum, q.table.View.Name, col.IdGenerator.IndentityIncrement)
+	END IF;`, colname, colname, colname, col.IdGenerator.IdentityMinimum, q.table.View.Name, col.IdGenerator.IndentityIncrement)
 		}
 	}
 	sort.Strings(cols)
@@ -59,30 +58,29 @@ func (q *QueryRewriter) createInsertTriggers(ctx context.Context) error {
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
-	BEGIN
-	`, q.table.View.Name)
+	BEGIN`, q.table.View.Name)
+
+	// TODO: make it more generic way for auto-generate id
+	if idGeneratorQuery != "" {
+		storedProcedureQuery += idGeneratorQuery
+	}
 
 	// check unique columns
 	for _, index := range q.table.Snapshot.Indexs {
 		if index.isUnique {
 			storedProcedureQuery += fmt.Sprintf(`
-		IF EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
-			RAISE EXCEPTION 'column %% already exists', NEW.%s;
-		END IF;`, q.table.View.Name, index.ColumnName, index.ColumnName, index.ColumnName)
+	IF EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
+		RAISE EXCEPTION 'column %% already exists', NEW.%s;
+	END IF;`, q.table.View.Name, index.ColumnName, index.ColumnName, index.ColumnName)
 		}
 	}
 
 	// if it has foreign key, check if the key exists in reference table
 	for _, constraint := range q.table.Snapshot.ForeignKeyConstraints {
 		storedProcedureQuery += fmt.Sprintf(`
-		IF NOT EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
-		RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in %s table';
-		END IF;`, constraint.RefTableName, constraint.RefColumnName, constraint.RefColumnName, constraint.RefTableName)
-	}
-
-	// TODO: make it more generic way for auto-generate id
-	if idGeneratorQuery != "" {
-		storedProcedureQuery += idGeneratorQuery
+	IF NOT EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
+	RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in %s table';
+	END IF;`, constraint.RefTableName, constraint.RefColumnName, constraint.RefColumnName, constraint.RefTableName)
 	}
 
 	storedProcedureQuery += fmt.Sprintf(`
@@ -131,8 +129,17 @@ func (q *QueryRewriter) createUpdateTriggers(ctx context.Context) error {
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
-	BEGIN
-	`, q.table.View.Name)
+	BEGIN`, q.table.View.Name)
+
+	// check unique columns
+	for _, index := range q.table.Snapshot.Indexs {
+		if index.isUnique {
+			storedProcedureQuery += fmt.Sprintf(`
+	IF EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) AND NEW.%s != OLD.%s THEN
+		RAISE EXCEPTION 'column %% already exists', NEW.%s;
+	END IF;`, q.table.View.Name, index.ColumnName, index.ColumnName, index.ColumnName, index.ColumnName, index.ColumnName)
+		}
+	}
 
 	// if it has foreign key, check if the key exists in reference table
 	for _, constraint := range q.table.Snapshot.ForeignKeyConstraints {
