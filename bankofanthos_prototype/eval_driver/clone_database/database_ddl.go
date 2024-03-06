@@ -21,12 +21,15 @@ type CloneDdl struct {
 }
 
 func NewCloneDdl(ctx context.Context, Database *Database) (*CloneDdl, error) {
-	clonedTables := make(map[string]*ClonedTable)
 	database := &CloneDdl{
-		ClonedTables: clonedTables,
+		ClonedTables: map[string]*ClonedTable{},
 		Database:     Database,
 	}
 
+	err := database.CreateClonedTables(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return database, nil
 }
 
@@ -68,19 +71,16 @@ func (c *CloneDdl) Close(ctx context.Context) error {
 }
 
 func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*ClonedTable, error) {
-	plus, minus, err := c.createPlusMinusTable(ctx, snapshot)
+	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create +/- tables, %s", err)
-	}
-	view, err := c.createView(ctx, snapshot)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create views, %s", err)
+		return nil, fmt.Errorf("failed to create +/- tables or view, %s", err)
 	}
 
-	err = c.applyIndexes(ctx, snapshot, plus, minus)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply index, %s", err)
-	}
+	// For now, do not apply index
+	// err = c.applyIndexes(ctx, snapshot, plus, minus)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to apply index, %s", err)
+	// }
 
 	err = c.applyRules(ctx, snapshot, view)
 	if err != nil {
@@ -137,72 +137,63 @@ func (c *CloneDdl) dropTable(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
 
 	_, err := c.Database.connPool.Exec(ctx, query)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return err
 }
 
 func (c *CloneDdl) dropView(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DROP VIEW IF EXISTS %s;", name)
 
 	_, err := c.Database.connPool.Exec(ctx, query)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
-func (c *CloneDdl) createPlusMinusTable(ctx context.Context, prodTable *Table) (*Table, *Table, error) {
+// TODO: Pick name for views and plus, minus which does not exist in database
+func (c *CloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *Table) (*Table, *Table, *View, error) {
 	plus := &Table{
 		Name: prodTable.Name + "plus",
 	}
-	plus.Cols = make(map[string]Column)
+	plus.Cols = map[string]Column{}
 
 	minus := &Table{
 		Name: prodTable.Name + "minus",
 	}
-	minus.Cols = make(map[string]Column)
-	columns := ""
+	minus.Cols = map[string]Column{}
+
+	var columnslst []string
 	for name, col := range prodTable.Cols {
 		plus.Cols[name] = col
 		minus.Cols[name] = col
-		columns += name + " "
-		columns += col.DataType
+		var column strings.Builder
+
+		column.WriteString(name + " " + col.DataType)
 		if col.CharacterMaximumLength > 0 {
-			columns += fmt.Sprintf("(%d)", col.CharacterMaximumLength)
+			fmt.Fprintf(&column, "(%d)", col.CharacterMaximumLength)
 		}
 		if col.Nullable == "NO" {
-			columns += " NOT NULL"
+			column.WriteString(" NOT NULL")
 		}
-		columns += ",\n"
+		columnslst = append(columnslst, column.String())
 	}
-	// remove the last comma
-	columns = columns[:len(columns)-2]
+	columns := strings.Join(columnslst, ",\n")
 
 	// create R+
-	plusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", prodTable.Name+"plus", columns)
+	plusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", plus.Name, columns)
 	_, err := c.Database.connPool.Exec(ctx, plusQuery)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// create R-
-	minusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", prodTable.Name+"minus", columns)
+	minusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", minus.Name, columns)
 	_, err = c.Database.connPool.Exec(ctx, minusQuery)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return plus, minus, nil
-}
-
-func (c *CloneDdl) createView(ctx context.Context, prodTable *Table) (*View, error) {
 	view := &View{
 		Name: prodTable.Name + "view",
 	}
-	view.Cols = make(map[string]Column)
+	view.Cols = map[string]Column{}
 
 	// for views, column is always nullable. No constraint is enforced on the view itself, but on the underlying tables.
 	var colnames []string
@@ -219,29 +210,29 @@ func (c *CloneDdl) createView(ctx context.Context, prodTable *Table) (*View, err
 	SELECT %s FROM %s
 	EXCEPT ALL
 	SELECT %s FROM %s;
-	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), prodTable.Name+"plus", strings.Join(colnames, ", "), prodTable.Name+"minus")
+	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), minus.Name)
 
-	_, err := c.Database.connPool.Exec(ctx, viewQuery)
+	_, err = c.Database.connPool.Exec(ctx, viewQuery)
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 
-	return view, nil
+	return plus, minus, view, nil
 }
 
 func (c *CloneDdl) applyIndexes(ctx context.Context, prodTable *Table, plus *Table, minus *Table) error {
 	// rename index
 	// remove UNIQUE if there is any
 	// apply index on both plus and minus tables
-	for _, index := range prodTable.Indexs {
+	for _, index := range prodTable.Indexes {
 		var plusIndex, minusIndex Index
 		indexDef := strings.ReplaceAll(strings.ToLower(index.IndexDef), " unique ", " ")
 
 		plusIndexDef := strings.ReplaceAll(strings.ToLower(indexDef), prodTable.Name, plus.Name)
 		plusIndex.IndexDef = plusIndexDef
 		plusIndex.Name = strings.ReplaceAll(strings.ToLower(index.Name), prodTable.Name, plus.Name)
-		plusIndex.isUnique = index.isUnique
-		plus.Indexs = append(plus.Indexs, plusIndex)
+		plusIndex.IsUnique = index.IsUnique
+		plus.Indexes = append(plus.Indexes, plusIndex)
 
 		_, err := c.Database.connPool.Exec(ctx, plusIndexDef)
 		if err != nil {
@@ -251,8 +242,8 @@ func (c *CloneDdl) applyIndexes(ctx context.Context, prodTable *Table, plus *Tab
 		minusIndexDef := strings.ReplaceAll(strings.ToLower(indexDef), prodTable.Name, minus.Name)
 		minusIndex.IndexDef = minusIndexDef
 		minusIndex.Name = strings.ReplaceAll(strings.ToLower(index.Name), prodTable.Name, minus.Name)
-		minusIndex.isUnique = index.isUnique
-		minus.Indexs = append(minus.Indexs, minusIndex)
+		minusIndex.IsUnique = index.IsUnique
+		minus.Indexes = append(minus.Indexes, minusIndex)
 		_, err = c.Database.connPool.Exec(ctx, minusIndexDef)
 		if err != nil {
 			return err

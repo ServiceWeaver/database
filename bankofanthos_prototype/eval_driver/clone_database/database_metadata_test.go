@@ -52,7 +52,7 @@ func TestListTableMetadata(t *testing.T) {
 	// Setup database
 	dbContainer, connPool, _, err := SetupTestDatabase(ctx)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	defer dbContainer.Terminate(ctx)
 
@@ -74,12 +74,12 @@ func TestListTableMetadata(t *testing.T) {
 	CREATE RULE PREVENT_UPDATE AS ON UPDATE TO users DO INSTEAD NOTHING;
 	`)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	database, err := NewDatabase(ctx, connPool)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	sortStringSlice := cmp.Transformer("Sort", func(table []string) []string {
@@ -88,26 +88,8 @@ func TestListTableMetadata(t *testing.T) {
 		return out
 	})
 
-	colOpt := cmp.Comparer(func(x, y Column) bool {
-		if x.Name != y.Name || x.DataType != y.DataType ||
-			x.Nullable != y.Nullable ||
-			x.CharacterMaximumLength != y.CharacterMaximumLength {
-			return false
-		}
-
-		if x.IdGenerator == nil && y.IdGenerator == nil {
-			return true
-		} else if x.IdGenerator != nil && y.IdGenerator != nil {
-			return x.IdGenerator.IdentityGeneration == y.IdGenerator.IdentityGeneration && x.IdGenerator.IdentityMaximum == y.IdGenerator.IdentityMaximum &&
-				x.IdGenerator.IdentityMinimum == y.IdGenerator.IdentityMinimum && x.IdGenerator.IdentityStart == y.IdGenerator.IdentityStart &&
-				x.IdGenerator.IndentityIncrement == y.IdGenerator.IndentityIncrement
-		}
-
-		return false
-	})
-
 	idxOpt := cmp.Comparer(func(x, y Index) bool {
-		return x.Name == y.Name && x.ColumnName == y.ColumnName && reflect.DeepEqual(strings.Fields(strings.ToLower(x.IndexDef)), strings.Fields(strings.ToLower(y.IndexDef))) && x.isUnique == y.isUnique
+		return x.Name == y.Name && x.ColumnName == y.ColumnName && reflect.DeepEqual(strings.Fields(strings.ToLower(x.IndexDef)), strings.Fields(strings.ToLower(y.IndexDef))) && x.IsUnique == y.IsUnique
 	})
 
 	ruleOpt := cmp.Comparer(func(x, y Rule) bool {
@@ -120,7 +102,7 @@ func TestListTableMetadata(t *testing.T) {
 	t.Run("ListTables", func(t *testing.T) {
 		tables, err := database.listTables(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTables := []string{"users", "contacts"}
 		if diff := cmp.Diff(expectedTables, tables, sortStringSlice); diff != "" {
@@ -131,26 +113,35 @@ func TestListTableMetadata(t *testing.T) {
 	t.Run("GetTableColumns", func(t *testing.T) {
 		cols, err := database.getTableCols(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
-		expectedAccountidCol := Column{Name: "accountid", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"}
-		if diff := cmp.Diff(cols["accountid"], expectedAccountidCol, colOpt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
+		want := map[string]Column{
+			"accountid": {
+				Name:                   "accountid",
+				DataType:               "character",
+				CharacterMaximumLength: 12,
+				Nullable:               "NO",
+			},
+			"username": {
+				Name:                   "username",
+				DataType:               "character varying",
+				CharacterMaximumLength: 64,
+				Nullable:               "NO",
+			},
+			"passhash": {
+				Name:     "passhash",
+				DataType: "bytea",
+				Nullable: "NO",
+			},
+			"birthday": {
+				Name:                   "birthday",
+				DataType:               "date",
+				CharacterMaximumLength: 0,
+				Nullable:               "YES",
+			},
 		}
-
-		expectedUsernameCol := Column{Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"}
-		if diff := cmp.Diff(cols["username"], expectedUsernameCol, colOpt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
-		}
-
-		expectedPasshashCol := Column{Name: "passhash", DataType: "bytea", Nullable: "NO"}
-		if diff := cmp.Diff(cols["passhash"], expectedPasshashCol, colOpt); diff != "" {
-			t.Errorf("(-want,+got):\n%s", diff)
-		}
-
-		expectedBirthdayCol := Column{Name: "birthday", DataType: "date", CharacterMaximumLength: 0, Nullable: "YES"}
-		if diff := cmp.Diff(cols["birthday"], expectedBirthdayCol, colOpt); diff != "" {
+		if diff := cmp.Diff(cols, want); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 	})
@@ -158,12 +149,12 @@ func TestListTableMetadata(t *testing.T) {
 	t.Run("GetTableIndexes", func(t *testing.T) {
 		indexes, err := database.getTableIndexes(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		expectedIndexes := []Index{
-			{Name: "users_pkey", ColumnName: "accountid", IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", isUnique: true},
-			{Name: "users_username_key", ColumnName: "username", IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", isUnique: true}}
+			{Name: "users_pkey", ColumnName: "accountid", IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", IsUnique: true},
+			{Name: "users_username_key", ColumnName: "username", IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true}}
 		if diff := cmp.Diff(expectedIndexes, indexes, idxOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -172,7 +163,7 @@ func TestListTableMetadata(t *testing.T) {
 	t.Run("GetTableRules", func(t *testing.T) {
 		rules, err := database.getTableRules(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		expectedRules := []Rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}}
@@ -184,7 +175,7 @@ func TestListTableMetadata(t *testing.T) {
 	t.Run("GetForeignConstraint", func(t *testing.T) {
 		contraints, err := database.getForeignKeyConstraints(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		expectedConstraints := []ForeignKeyConstraint{
@@ -223,12 +214,12 @@ func TestListTableMetadata(t *testing.T) {
 			EXECUTE PROCEDURE users_redirect_delete();
 		`)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := map[string]Trigger{"users_redirect_delete_trigger": {
 			Name:              "users_redirect_delete_trigger",
@@ -258,7 +249,7 @@ func TestListTableMetadata(t *testing.T) {
 	t.Run("GetDatabaseMetadata", func(t *testing.T) {
 		database, err := NewDatabase(ctx, connPool)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		if got, want := len(database.Tables), 2; got != want {
@@ -273,15 +264,15 @@ func TestListTableMetadata(t *testing.T) {
 				"passhash":  {Name: "passhash", DataType: "bytea", Nullable: "NO"},
 				"birthday":  {Name: "birthday", DataType: "date", Nullable: "YES"},
 			},
-			Indexs: []Index{
-				{Name: "users_pkey", ColumnName: "accountid", IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", isUnique: true},
-				{Name: "users_username_key", ColumnName: "username", IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", isUnique: true}},
+			Indexes: []Index{
+				{Name: "users_pkey", ColumnName: "accountid", IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", IsUnique: true},
+				{Name: "users_username_key", ColumnName: "username", IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true}},
 			Rules: []Rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}},
 			References: []Reference{
 				{ConstraintName: "contacts_username_fkey", BeRefedTableName: "users", BeRefedColumnName: "username", ForeignKeyTableName: "contacts", ForeignKeyColumnName: "username"},
 			},
 		}
-		if diff := cmp.Diff(expectedUserTable, database.Tables["users"], colOpt, idxOpt, ruleOpt, sortStringSlice); diff != "" {
+		if diff := cmp.Diff(expectedUserTable, database.Tables["users"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
@@ -297,7 +288,7 @@ func TestListTableMetadata(t *testing.T) {
 					ConstraintName: "contacts_username_fkey", TableName: "contacts", ColumnName: "username", RefTableName: "users", RefColumnName: "username"},
 			},
 		}
-		if diff := cmp.Diff(expectedContactTable, database.Tables["contacts"], colOpt, idxOpt, ruleOpt, sortStringSlice); diff != "" {
+		if diff := cmp.Diff(expectedContactTable, database.Tables["contacts"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 	})

@@ -20,27 +20,22 @@ func NewClonedDatabase(ctx context.Context, dbURL string) (*CloneDatabase, error
 
 	database, err := NewDatabase(ctx, connPool)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new database, err=%s", err)
+		return nil, fmt.Errorf("failed to create new database: %w", err)
 	}
 
 	cloneDdl, err := NewCloneDdl(ctx, database)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create new clone ddl, err=%s", err)
-	}
-
-	err = cloneDdl.CreateClonedTables(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create clone tables, err=%s", err)
+		return nil, fmt.Errorf("failed to create new clone ddl: %w", err)
 	}
 
 	for _, clonedTable := range cloneDdl.ClonedTables {
 		queryRewriter, err := NewQueryRewriter(connPool, clonedTable)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create new query rewriter, err=%s", err)
+			return nil, fmt.Errorf("failed to create new query rewriter: %w", err)
 		}
 		err = queryRewriter.CreateTriggers(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create triggers, err=%s", err)
+			return nil, fmt.Errorf("failed to create triggers: %w", err)
 		}
 	}
 

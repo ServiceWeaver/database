@@ -24,13 +24,13 @@ func NewQueryRewriter(connPool *pgxpool.Pool, clonedTable *ClonedTable) (*QueryR
 
 func (q *QueryRewriter) CreateTriggers(ctx context.Context) error {
 	if err := q.createInsertTriggers(ctx); err != nil {
-		return fmt.Errorf("failed to create insert triggers, err=%s", err)
+		return fmt.Errorf("failed to create insert triggers: %w", err)
 	}
 	if err := q.createUpdateTriggers(ctx); err != nil {
-		return fmt.Errorf("failed to create update triggers, err=%s", err)
+		return fmt.Errorf("failed to create update triggers: %w", err)
 	}
 	if err := q.createDeleteTriggers(ctx); err != nil {
-		return fmt.Errorf("failed to create delete triggers, err=%s", err)
+		return fmt.Errorf("failed to create delete triggers: %w", err)
 	}
 
 	return nil
@@ -66,8 +66,8 @@ func (q *QueryRewriter) createInsertTriggers(ctx context.Context) error {
 	}
 
 	// check unique columns
-	for _, index := range q.table.Snapshot.Indexs {
-		if index.isUnique {
+	for _, index := range q.table.Snapshot.Indexes {
+		if index.IsUnique {
 			storedProcedureQuery += fmt.Sprintf(`
 	IF EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
 		RAISE EXCEPTION 'column %% already exists', NEW.%s;
@@ -132,8 +132,8 @@ func (q *QueryRewriter) createUpdateTriggers(ctx context.Context) error {
 	BEGIN`, q.table.View.Name)
 
 	// check unique columns
-	for _, index := range q.table.Snapshot.Indexs {
-		if index.isUnique {
+	for _, index := range q.table.Snapshot.Indexes {
+		if index.IsUnique {
 			storedProcedureQuery += fmt.Sprintf(`
 	IF EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) AND NEW.%s != OLD.%s THEN
 		RAISE EXCEPTION 'column %% already exists', NEW.%s;

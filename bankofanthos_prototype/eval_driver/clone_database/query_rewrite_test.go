@@ -15,7 +15,7 @@ func TestQueryRewrite(t *testing.T) {
 	// Setup database
 	dbContainer, connPool, _, err := SetupTestDatabase(ctx)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 	defer dbContainer.Terminate(ctx)
 
@@ -37,22 +37,19 @@ func TestQueryRewrite(t *testing.T) {
 	CREATE RULE PREVENT_UPDATE AS ON UPDATE TO users DO INSTEAD NOTHING;
 	`)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	database, err := NewDatabase(ctx, connPool)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	CloneDdl, err := NewCloneDdl(ctx, database)
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
-	err = CloneDdl.CreateClonedTables(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+
 	defer CloneDdl.Close(ctx)
 
 	procOpt := cmp.Comparer(func(x, y Procedure) bool {
@@ -61,16 +58,16 @@ func TestQueryRewrite(t *testing.T) {
 	t.Run("InsertTriggersForUsers", func(t *testing.T) {
 		queryRewriter, err := NewQueryRewriter(connPool, CloneDdl.ClonedTables["users"])
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		err = queryRewriter.createInsertTriggers(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := Trigger{
 			Name:              "users_redirect_insert_trigger",
@@ -104,16 +101,16 @@ func TestQueryRewrite(t *testing.T) {
 	t.Run("InsertTriggersForContacts", func(t *testing.T) {
 		queryRewriter, err := NewQueryRewriter(connPool, CloneDdl.ClonedTables["contacts"])
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		err = queryRewriter.createInsertTriggers(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "contacts")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := Trigger{
 			Name:              "contacts_redirect_insert_trigger",
@@ -144,16 +141,16 @@ func TestQueryRewrite(t *testing.T) {
 	t.Run("UpdateTriggersForUsers", func(t *testing.T) {
 		queryRewriter, err := NewQueryRewriter(connPool, CloneDdl.ClonedTables["users"])
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		err = queryRewriter.createUpdateTriggers(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := Trigger{
 			Name:              "users_redirect_update_trigger",
@@ -165,6 +162,12 @@ func TestQueryRewrite(t *testing.T) {
 				Name: "users_redirect_update",
 				ProSrc: `
 				BEGIN
+				IF EXISTS (SELECT * FROM users WHERE accountid = NEW.accountid) AND NEW.accountid != OLD.accountid THEN
+					RAISE EXCEPTION 'column % already exists', NEW.accountid;
+				END IF;
+				IF EXISTS (SELECT * FROM users WHERE username = NEW.username) AND NEW.username != OLD.username THEN
+                	RAISE EXCEPTION 'column % already exists', NEW.username;
+       			END IF;
 				IF EXISTS (SELECT * FROM contacts WHERE username = OLD.username) AND NEW.username != OLD.username THEN
 				RAISE EXCEPTION 'violates foreign key constraint';
 				END IF;
@@ -184,16 +187,16 @@ func TestQueryRewrite(t *testing.T) {
 	t.Run("UpdateTriggersForContacts", func(t *testing.T) {
 		queryRewriter, err := NewQueryRewriter(connPool, CloneDdl.ClonedTables["contacts"])
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		err = queryRewriter.createUpdateTriggers(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "contacts")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := Trigger{
 			Name:              "contacts_redirect_update_trigger",
@@ -224,16 +227,16 @@ func TestQueryRewrite(t *testing.T) {
 	t.Run("DeleteTriggersForUsers", func(t *testing.T) {
 		queryRewriter, err := NewQueryRewriter(connPool, CloneDdl.ClonedTables["users"])
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		err = queryRewriter.createDeleteTriggers(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "users")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := Trigger{
 			Name:              "users_redirect_delete_trigger",
@@ -263,16 +266,16 @@ func TestQueryRewrite(t *testing.T) {
 	t.Run("DeleteTriggersForContacts", func(t *testing.T) {
 		queryRewriter, err := NewQueryRewriter(connPool, CloneDdl.ClonedTables["contacts"])
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		err = queryRewriter.createDeleteTriggers(ctx)
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 
 		triggers, err := database.getTableTriggers(ctx, "contacts")
 		if err != nil {
-			t.Error(err)
+			t.Fatal(err)
 		}
 		expectedTriggers := Trigger{
 			Name:              "contacts_redirect_delete_trigger",

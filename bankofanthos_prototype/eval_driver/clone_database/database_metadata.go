@@ -28,7 +28,7 @@ type Column struct {
 type Index struct {
 	Name       string
 	IndexDef   string
-	isUnique   bool
+	IsUnique   bool
 	ColumnName string
 }
 
@@ -39,7 +39,7 @@ type Reference struct {
 	BeRefedColumnName    string
 	ForeignKeyTableName  string
 	ForeignKeyColumnName string
-	Action               string // set default to no action
+	Action               string // TODO: Get actions from table metadata.Set default to no action
 }
 
 // a TableName(ColumnName) has a foreign key constraint which refers another RefTableName(RefColumnName)
@@ -49,7 +49,7 @@ type ForeignKeyConstraint struct {
 	ColumnName     string
 	RefTableName   string
 	RefColumnName  string
-	Action         string // set default to no action
+	Action         string // TODO: Get actions from table metadata. set default to no action
 }
 
 type Rule struct {
@@ -81,7 +81,7 @@ type View struct {
 type Table struct {
 	Name                  string
 	Cols                  map[string]Column
-	Indexs                []Index
+	Indexes               []Index
 	Rules                 []Rule
 	References            []Reference
 	ForeignKeyConstraints []ForeignKeyConstraint
@@ -96,7 +96,7 @@ func NewDatabase(
 	ctx context.Context,
 	connPool *pgxpool.Pool,
 ) (*Database, error) {
-	Tables := make(map[string]*Table)
+	Tables := map[string]*Table{}
 	database := &Database{
 		connPool: connPool,
 		Tables:   Tables,
@@ -109,46 +109,46 @@ func NewDatabase(
 	return database, nil
 }
 
-func (p *Database) GetDatabaseMetadata(ctx context.Context) error {
-	tables, err := p.listTables(ctx)
+func (d *Database) GetDatabaseMetadata(ctx context.Context) error {
+	tables, err := d.listTables(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list tables, err=%s", err)
+		return fmt.Errorf("failed to list tables: %w", err)
 	}
 	for _, tablename := range tables {
-		table, err := p.GetTable(ctx, tablename)
+		table, err := d.GetTable(ctx, tablename)
 		if err != nil {
-			return fmt.Errorf("failed to get table %s, err=%s", tablename, err)
+			return fmt.Errorf("failed to get table %s: %w", tablename, err)
 		}
-		p.Tables[tablename] = table
+		d.Tables[tablename] = table
 	}
 
-	constraints, err := p.getForeignKeyConstraints(ctx)
+	constraints, err := d.getForeignKeyConstraints(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get foreign key constraints, err=%s", err)
+		return fmt.Errorf("failed to get foreign key constraints: %w", err)
 	}
 	for _, constraint := range constraints {
-		constraintTable := p.Tables[constraint.TableName]
+		constraintTable := d.Tables[constraint.TableName]
 		constraintTable.ForeignKeyConstraints = append(constraintTable.ForeignKeyConstraints, constraint)
-		p.Tables[constraint.TableName] = constraintTable
 
-		refTable := p.Tables[constraint.RefTableName]
+		refTable := d.Tables[constraint.RefTableName]
 		refTable.References = append(refTable.References, Reference{
 			ConstraintName:       constraint.ConstraintName,
 			BeRefedTableName:     constraint.RefTableName,
 			BeRefedColumnName:    constraint.RefColumnName,
 			ForeignKeyTableName:  constraint.TableName,
 			ForeignKeyColumnName: constraint.ColumnName})
-		p.Tables[constraint.RefTableName] = refTable
 	}
 
 	return nil
 }
 
-func (p *Database) listTables(ctx context.Context) ([]string, error) {
+func (d *Database) listTables(ctx context.Context) ([]string, error) {
 	var tables []string
-	query := "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'"
+	query := `SELECT tablename 
+	FROM pg_catalog.pg_tables 
+	WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'`
 
-	rows, err := p.connPool.Query(ctx, query)
+	rows, err := d.connPool.Query(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -161,43 +161,40 @@ func (p *Database) listTables(ctx context.Context) ([]string, error) {
 		tables = append(tables, tablename)
 	}
 
-	return tables, nil
+	return tables, rows.Err()
 }
 
-func (p *Database) GetTable(ctx context.Context, tablename string) (*Table, error) {
+func (d *Database) GetTable(ctx context.Context, tablename string) (*Table, error) {
 	var table Table
 	table.Name = tablename
-	cols, err := p.getTableCols(ctx, tablename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get table cols, err=%s", err)
+	var err error
+	if table.Cols, err = d.getTableCols(ctx, tablename); err != nil {
+		return nil, fmt.Errorf("failed to get table cols: %w", err)
 	}
-	table.Cols = cols
 
-	indexes, err := p.getTableIndexes(ctx, tablename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get table indexes, err=%s", err)
+	if table.Indexes, err = d.getTableIndexes(ctx, tablename); err != nil {
+		return nil, fmt.Errorf("failed to get table indexes: %w", err)
 	}
-	table.Indexs = indexes
 
-	rules, err := p.getTableRules(ctx, tablename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get table rules, err=%s", err)
+	if table.Rules, err = d.getTableRules(ctx, tablename); err != nil {
+		return nil, fmt.Errorf("failed to get table rules: %w", err)
 	}
-	table.Rules = rules
+
 	return &table, nil
 }
 
-func (p *Database) getTableCols(ctx context.Context, tablename string) (map[string]Column, error) {
-	rows, err := p.connPool.Query(ctx, `
+// TODO: Now we assume all table schema is public, revisit this
+func (d *Database) getTableCols(ctx context.Context, tablename string) (map[string]Column, error) {
+	rows, err := d.connPool.Query(ctx, `
 		SELECT column_name,  is_nullable, data_type, character_maximum_length, identity_generation, identity_start, identity_increment, identity_maximum, identity_minimum 
 		FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1
 	`, tablename)
 	if err != nil {
-		return nil, fmt.Errorf("failed to run query, err=%s", err)
+		return nil, fmt.Errorf("failed to run query: %w", err)
 	}
 	defer rows.Close()
 
-	cols := make(map[string]Column)
+	cols := map[string]Column{}
 	for rows.Next() {
 		var col Column
 		var CharacterMaximumLength *int64
@@ -207,7 +204,7 @@ func (p *Database) getTableCols(ctx context.Context, tablename string) (map[stri
 		var identityMaximum *string
 		var identityMinimum *string
 		if err := rows.Scan(&col.Name, &col.Nullable, &col.DataType, &CharacterMaximumLength, &identityGeneration, &identityStart, &indentityIncrement, &identityMaximum, &identityMinimum); err != nil {
-			return nil, fmt.Errorf("failed to scan rows, err=%s", err)
+			return nil, fmt.Errorf("failed to scan rows: %w", err)
 		}
 		if CharacterMaximumLength != nil {
 			col.CharacterMaximumLength = *CharacterMaximumLength
@@ -215,19 +212,19 @@ func (p *Database) getTableCols(ctx context.Context, tablename string) (map[stri
 		if identityGeneration != nil {
 			start, err := strconv.ParseInt(*identityStart, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse identity start to int64, err=%s", err)
+				return nil, fmt.Errorf("failed to parse identity start to int64: %w", err)
 			}
 			increment, err := strconv.ParseInt(*indentityIncrement, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse identity increment to int64, err=%s", err)
+				return nil, fmt.Errorf("failed to parse identity increment to int64: %w", err)
 			}
 			maximum, err := strconv.ParseInt(*identityMaximum, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse identity maximum to int64, err=%s", err)
+				return nil, fmt.Errorf("failed to parse identity maximum to int64: %w", err)
 			}
 			minimum, err := strconv.ParseInt(*identityMinimum, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse identity minimum to int64, err=%s", err)
+				return nil, fmt.Errorf("failed to parse identity minimum to int64: %w", err)
 			}
 			idGenerator := &IdGenerator{
 				IdentityGeneration: *identityGeneration,
@@ -241,12 +238,13 @@ func (p *Database) getTableCols(ctx context.Context, tablename string) (map[stri
 		cols[col.Name] = col
 	}
 
-	return cols, nil
+	return cols, rows.Err()
 }
 
-func (p *Database) getTableIndexes(ctx context.Context, tablename string) ([]Index, error) {
+// TODO: Handle more exotic indexes, e.g. indexes on expression
+func (d *Database) getTableIndexes(ctx context.Context, tablename string) ([]Index, error) {
 	var indexes []Index
-	rows, err := p.connPool.Query(
+	rows, err := d.connPool.Query(
 		ctx,
 		`SELECT indexname, indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = $1`,
 		tablename,
@@ -262,7 +260,7 @@ func (p *Database) getTableIndexes(ctx context.Context, tablename string) ([]Ind
 			return nil, err
 		}
 		if strings.Contains(strings.ToLower(index.IndexDef), "unique") {
-			index.isUnique = true
+			index.IsUnique = true
 		}
 
 		colFrom := strings.Index(index.IndexDef, "(")
@@ -273,12 +271,12 @@ func (p *Database) getTableIndexes(ctx context.Context, tablename string) ([]Ind
 		indexes = append(indexes, index)
 	}
 
-	return indexes, nil
+	return indexes, rows.Err()
 }
 
-func (p *Database) getTableRules(ctx context.Context, tablename string) ([]Rule, error) {
+func (d *Database) getTableRules(ctx context.Context, tablename string) ([]Rule, error) {
 	var rules []Rule
-	rows, err := p.connPool.Query(
+	rows, err := d.connPool.Query(
 		ctx,
 		`SELECT rulename,definition FROM pg_rules WHERE schemaname = 'public' AND tablename = $1`,
 		tablename,
@@ -295,12 +293,12 @@ func (p *Database) getTableRules(ctx context.Context, tablename string) ([]Rule,
 		rules = append(rules, rule)
 	}
 
-	return rules, nil
+	return rules, rows.Err()
 }
 
-func (p *Database) getForeignKeyConstraints(ctx context.Context) ([]ForeignKeyConstraint, error) {
+func (d *Database) getForeignKeyConstraints(ctx context.Context) ([]ForeignKeyConstraint, error) {
 	var constraints []ForeignKeyConstraint
-	rows, err := p.connPool.Query(
+	rows, err := d.connPool.Query(
 		ctx, `
 		SELECT                                                                                           
 		tc.constraint_name, 
@@ -328,12 +326,12 @@ func (p *Database) getForeignKeyConstraints(ctx context.Context) ([]ForeignKeyCo
 		constraints = append(constraints, constraint)
 	}
 
-	return constraints, nil
+	return constraints, rows.Err()
 }
 
-func (p *Database) getTableTriggers(ctx context.Context, tablename string) (map[string]Trigger, error) {
-	triggers := make(map[string]Trigger)
-	rows, err := p.connPool.Query(
+func (d *Database) getTableTriggers(ctx context.Context, tablename string) (map[string]Trigger, error) {
+	triggers := map[string]Trigger{}
+	rows, err := d.connPool.Query(
 		ctx,
 		`select trigger_name, event_manipulation, action_statement, action_orientation, action_timing from information_schema.triggers
 		WHERE event_object_table=$1`,
@@ -350,7 +348,7 @@ func (p *Database) getTableTriggers(ctx context.Context, tablename string) (map[
 		}
 		funcName := strings.ReplaceAll(trigger.ActionStatement, "EXECUTE FUNCTION ", "")
 		funcName = funcName[:len(funcName)-2] // remove () at the end
-		proSrc, err := p.getStoredProcedure(ctx, funcName)
+		proSrc, err := d.getStoredProcedure(ctx, funcName)
 		if err != nil {
 			return nil, err
 		}
@@ -358,12 +356,12 @@ func (p *Database) getTableTriggers(ctx context.Context, tablename string) (map[
 		triggers[trigger.Name] = trigger
 	}
 
-	return triggers, nil
+	return triggers, rows.Err()
 }
 
-func (p *Database) getStoredProcedure(ctx context.Context, funcName string) (string, error) {
+func (d *Database) getStoredProcedure(ctx context.Context, funcName string) (string, error) {
 	var prosrc string
-	p.connPool.QueryRow(ctx, `
+	d.connPool.QueryRow(ctx, `
 	SELECT prosrc FROM pg_proc WHERE proname = $1;
 	`, funcName).Scan(&prosrc)
 	return prosrc, nil
