@@ -26,14 +26,14 @@ func NewCloneDdl(ctx context.Context, Database *Database) (*CloneDdl, error) {
 		Database:     Database,
 	}
 
-	err := database.CreateClonedTables(ctx)
+	err := database.createClonedTables(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return database, nil
 }
 
-func (c *CloneDdl) CreateClonedTables(ctx context.Context) error {
+func (c *CloneDdl) createClonedTables(ctx context.Context) error {
 	for tablename, table := range c.Database.Tables {
 		clonedTable, err := c.createClonedTable(ctx, table)
 		if err != nil {

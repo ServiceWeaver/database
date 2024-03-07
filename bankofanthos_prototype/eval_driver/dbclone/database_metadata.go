@@ -101,7 +101,7 @@ func NewDatabase(
 		connPool: connPool,
 		Tables:   Tables,
 	}
-	err := database.GetDatabaseMetadata(ctx)
+	err := database.getDatabaseMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func NewDatabase(
 	return database, nil
 }
 
-func (d *Database) GetDatabaseMetadata(ctx context.Context) error {
+func (d *Database) getDatabaseMetadata(ctx context.Context) error {
 	tables, err := d.listTables(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list tables: %w", err)

@@ -133,16 +133,10 @@ func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool
 
 func switchRPlusRMinusCloning(dbPort string) error {
 	fmt.Printf("Switching to R+/R- cloning database at port %s\n", dbPort)
+	ctx := context.Background()
+
 	postgresdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/postgresdb?sslmode=disable", dbPort)
 
-	// triggerPostgresdbCmd := exec.Command("psql", postgresdbUrl, "-f", "postgresdb_triggers.sql")
-
-	// out, err := triggerPostgresdbCmd.CombinedOutput()
-	// fmt.Printf("triggerPostgresdbCmd output is %s\n", out)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to dump postgresdb: %v", err)
-	// }
-	ctx := context.Background()
 	postgresCloneDatabase, err := dbclone.Clone(ctx, postgresdbUrl)
 	if err != nil {
 		return err
@@ -150,12 +144,6 @@ func switchRPlusRMinusCloning(dbPort string) error {
 	defer postgresCloneDatabase.Close()
 
 	accountdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/accountsdb?sslmode=disable", dbPort)
-	// triggerAccountsdbCmd := exec.Command("psql", accountdbUrl, "-f", "accountsdb_triggers.sql")
-	// out, err := triggerAccountsdbCmd.CombinedOutput()
-	// fmt.Printf("triggerAccountsdbCmd output is %s\n", out)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to dump accountsdb: %v", err)
-	// }
 	accountsCloneDatabase, err := dbclone.Clone(ctx, accountdbUrl)
 	if err != nil {
 		return err

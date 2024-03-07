@@ -12,7 +12,7 @@ type ClonedDatabase struct {
 	cloneDdl *CloneDdl
 }
 
-// Clone takes a dbURL, and connects to the database by dbURL.
+// Clone takes a dbURL("postgresql://user:password@ip:port/dbname?sslmode=disable"), and connects to the database.
 // After connecting to the database, it clones all the tables and implements query rewrite.
 // application will run on the cloned database later.
 func Clone(ctx context.Context, dbURL string) (*ClonedDatabase, error) {
@@ -38,7 +38,7 @@ func Clone(ctx context.Context, dbURL string) (*ClonedDatabase, error) {
 		}
 	}
 
-	fmt.Println("Successfully created clone database")
+	fmt.Printf("Successfully created clone database %s\n", dbURL)
 	clonedDatabase := &ClonedDatabase{
 		database: database,
 		cloneDdl: cloneDdl,
