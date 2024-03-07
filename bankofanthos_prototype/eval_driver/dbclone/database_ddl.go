@@ -73,7 +73,7 @@ func (c *CloneDdl) Close(ctx context.Context) error {
 func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*ClonedTable, error) {
 	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create +/- tables or view, %s", err)
+		return nil, fmt.Errorf("failed to create +/- tables or view: %w", err)
 	}
 
 	// For now, do not apply index
@@ -84,19 +84,19 @@ func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*Clo
 
 	err = c.applyRules(ctx, snapshot, view)
 	if err != nil {
-		return nil, fmt.Errorf("failed to apply rules, %s", err)
+		return nil, fmt.Errorf("failed to apply rules: %w", err)
 	}
 
 	// at the end, rename original snapshot to tablesnapshot and view as the original snapshot name
 	originalName := snapshot.Name
 	err = c.alterTableName(ctx, snapshot.Name+"snapshot", snapshot)
 	if err != nil {
-		return nil, fmt.Errorf("failed to alter table names, %s", err)
+		return nil, fmt.Errorf("failed to alter table names: %w", err)
 	}
 
 	err = c.alterViewName(ctx, originalName, view)
 	if err != nil {
-		return nil, fmt.Errorf("failed to alter view names, %s", err)
+		return nil, fmt.Errorf("failed to alter view names: %w", err)
 	}
 
 	clonedTable := &ClonedTable{
