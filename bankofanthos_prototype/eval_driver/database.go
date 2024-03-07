@@ -1,7 +1,7 @@
 package main
 
 import (
-	clonedatabase "bankofanthos_prototype/eval_driver/clone_database"
+	dbclone "bankofanthos_prototype/eval_driver/dbclone"
 	"context"
 	"fmt"
 	"os"
@@ -143,7 +143,7 @@ func switchRPlusRMinusCloning(dbPort string) error {
 	// 	return fmt.Errorf("failed to dump postgresdb: %v", err)
 	// }
 	ctx := context.Background()
-	postgresCloneDatabase, err := clonedatabase.NewClonedDatabase(ctx, postgresdbUrl)
+	postgresCloneDatabase, err := dbclone.Clone(ctx, postgresdbUrl)
 	if err != nil {
 		return err
 	}
@@ -156,7 +156,7 @@ func switchRPlusRMinusCloning(dbPort string) error {
 	// if err != nil {
 	// 	return fmt.Errorf("failed to dump accountsdb: %v", err)
 	// }
-	accountsCloneDatabase, err := clonedatabase.NewClonedDatabase(ctx, accountdbUrl)
+	accountsCloneDatabase, err := dbclone.Clone(ctx, accountdbUrl)
 	if err != nil {
 		return err
 	}
