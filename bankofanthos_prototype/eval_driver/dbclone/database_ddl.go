@@ -8,22 +8,22 @@ import (
 	"strings"
 )
 
-type ClonedTable struct {
-	Snapshot *Table
-	Plus     *Table
-	Minus    *Table
-	View     *View
+type clonedTable struct {
+	Snapshot *table
+	Plus     *table
+	Minus    *table
+	View     *view
 }
 
-type CloneDdl struct {
-	ClonedTables map[string]*ClonedTable
-	Database     *Database
+type cloneDdl struct {
+	clonedTables map[string]*clonedTable
+	database     *database
 }
 
-func NewCloneDdl(ctx context.Context, Database *Database) (*CloneDdl, error) {
-	database := &CloneDdl{
-		ClonedTables: map[string]*ClonedTable{},
-		Database:     Database,
+func newCloneDdl(ctx context.Context, Database *database) (*cloneDdl, error) {
+	database := &cloneDdl{
+		clonedTables: map[string]*clonedTable{},
+		database:     Database,
 	}
 
 	err := database.createClonedTables(ctx)
@@ -33,21 +33,21 @@ func NewCloneDdl(ctx context.Context, Database *Database) (*CloneDdl, error) {
 	return database, nil
 }
 
-func (c *CloneDdl) createClonedTables(ctx context.Context) error {
-	for tablename, table := range c.Database.Tables {
+func (c *cloneDdl) createClonedTables(ctx context.Context) error {
+	for tablename, table := range c.database.Tables {
 		clonedTable, err := c.createClonedTable(ctx, table)
 		if err != nil {
 			return err
 		}
-		c.ClonedTables[tablename] = clonedTable
+		c.clonedTables[tablename] = clonedTable
 	}
 
 	return nil
 }
 
-func (c *CloneDdl) Close(ctx context.Context) error {
+func (c *cloneDdl) close(ctx context.Context) error {
 	// drop all tables, rename the snapshot back
-	for tablename, table := range c.ClonedTables {
+	for tablename, table := range c.clonedTables {
 		err := c.dropView(ctx, table.View.Name)
 		if err != nil {
 			return err
@@ -70,7 +70,7 @@ func (c *CloneDdl) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*ClonedTable, error) {
+func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clonedTable, error) {
 	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create +/- tables or view: %w", err)
@@ -99,20 +99,20 @@ func (c *CloneDdl) createClonedTable(ctx context.Context, snapshot *Table) (*Clo
 		return nil, fmt.Errorf("failed to alter view names: %w", err)
 	}
 
-	clonedTable := &ClonedTable{
+	clonedTable := &clonedTable{
 		Snapshot: snapshot,
 		Plus:     plus,
 		Minus:    minus,
 		View:     view,
 	}
 
-	c.ClonedTables[originalName] = clonedTable
+	c.clonedTables[originalName] = clonedTable
 	return clonedTable, nil
 }
 
-func (c *CloneDdl) alterTableName(ctx context.Context, newName string, table *Table) error {
+func (c *cloneDdl) alterTableName(ctx context.Context, newName string, table *table) error {
 	query := fmt.Sprintf("ALTER TABLE %s RENAME to %s;", table.Name, newName)
-	_, err := c.Database.connPool.Exec(ctx, query)
+	_, err := c.database.connPool.Exec(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -121,10 +121,10 @@ func (c *CloneDdl) alterTableName(ctx context.Context, newName string, table *Ta
 	return nil
 }
 
-func (c *CloneDdl) alterViewName(ctx context.Context, newName string, view *View) error {
+func (c *cloneDdl) alterViewName(ctx context.Context, newName string, view *view) error {
 	query := fmt.Sprintf("ALTER VIEW %s RENAME to %s;", view.Name, newName)
 
-	_, err := c.Database.connPool.Exec(ctx, query)
+	_, err := c.database.connPool.Exec(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -133,32 +133,32 @@ func (c *CloneDdl) alterViewName(ctx context.Context, newName string, view *View
 	return nil
 }
 
-func (c *CloneDdl) dropTable(ctx context.Context, name string) error {
+func (c *cloneDdl) dropTable(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
 
-	_, err := c.Database.connPool.Exec(ctx, query)
+	_, err := c.database.connPool.Exec(ctx, query)
 
 	return err
 }
 
-func (c *CloneDdl) dropView(ctx context.Context, name string) error {
+func (c *cloneDdl) dropView(ctx context.Context, name string) error {
 	query := fmt.Sprintf("DROP VIEW IF EXISTS %s;", name)
 
-	_, err := c.Database.connPool.Exec(ctx, query)
+	_, err := c.database.connPool.Exec(ctx, query)
 	return err
 }
 
 // TODO: Pick name for views and plus, minus which does not exist in database
-func (c *CloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *Table) (*Table, *Table, *View, error) {
-	plus := &Table{
+func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table) (*table, *table, *view, error) {
+	plus := &table{
 		Name: prodTable.Name + "plus",
 	}
-	plus.Cols = map[string]Column{}
+	plus.Cols = map[string]column{}
 
-	minus := &Table{
+	minus := &table{
 		Name: prodTable.Name + "minus",
 	}
-	minus.Cols = map[string]Column{}
+	minus.Cols = map[string]column{}
 
 	var columnslst []string
 	for name, col := range prodTable.Cols {
@@ -179,21 +179,21 @@ func (c *CloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *T
 
 	// create R+
 	plusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", plus.Name, columns)
-	_, err := c.Database.connPool.Exec(ctx, plusQuery)
+	_, err := c.database.connPool.Exec(ctx, plusQuery)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// create R-
 	minusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", minus.Name, columns)
-	_, err = c.Database.connPool.Exec(ctx, minusQuery)
+	_, err = c.database.connPool.Exec(ctx, minusQuery)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	view := &View{
+	view := &view{
 		Name: prodTable.Name + "view",
 	}
-	view.Cols = map[string]Column{}
+	view.Cols = map[string]column{}
 
 	// for views, column is always nullable. No constraint is enforced on the view itself, but on the underlying tables.
 	var colnames []string
@@ -212,7 +212,7 @@ func (c *CloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *T
 	SELECT %s FROM %s;
 	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), minus.Name)
 
-	_, err = c.Database.connPool.Exec(ctx, viewQuery)
+	_, err = c.database.connPool.Exec(ctx, viewQuery)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -220,31 +220,31 @@ func (c *CloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *T
 	return plus, minus, view, nil
 }
 
-func (c *CloneDdl) applyIndexes(ctx context.Context, prodTable *Table, plus *Table, minus *Table) error {
+func (c *cloneDdl) applyIndexes(ctx context.Context, prodTable *table, plus *table, minus *table) error {
 	// rename index
 	// remove UNIQUE if there is any
 	// apply index on both plus and minus tables
-	for _, index := range prodTable.Indexes {
-		var plusIndex, minusIndex Index
-		indexDef := strings.ReplaceAll(strings.ToLower(index.IndexDef), " unique ", " ")
+	for _, idx := range prodTable.Indexes {
+		var plusIndex, minusIndex index
+		indexDef := strings.ReplaceAll(strings.ToLower(idx.IndexDef), " unique ", " ")
 
 		plusIndexDef := strings.ReplaceAll(strings.ToLower(indexDef), prodTable.Name, plus.Name)
 		plusIndex.IndexDef = plusIndexDef
-		plusIndex.Name = strings.ReplaceAll(strings.ToLower(index.Name), prodTable.Name, plus.Name)
-		plusIndex.IsUnique = index.IsUnique
+		plusIndex.Name = strings.ReplaceAll(strings.ToLower(idx.Name), prodTable.Name, plus.Name)
+		plusIndex.IsUnique = idx.IsUnique
 		plus.Indexes = append(plus.Indexes, plusIndex)
 
-		_, err := c.Database.connPool.Exec(ctx, plusIndexDef)
+		_, err := c.database.connPool.Exec(ctx, plusIndexDef)
 		if err != nil {
 			return err
 		}
 
 		minusIndexDef := strings.ReplaceAll(strings.ToLower(indexDef), prodTable.Name, minus.Name)
 		minusIndex.IndexDef = minusIndexDef
-		minusIndex.Name = strings.ReplaceAll(strings.ToLower(index.Name), prodTable.Name, minus.Name)
-		minusIndex.IsUnique = index.IsUnique
+		minusIndex.Name = strings.ReplaceAll(strings.ToLower(idx.Name), prodTable.Name, minus.Name)
+		minusIndex.IsUnique = idx.IsUnique
 		minus.Indexes = append(minus.Indexes, minusIndex)
-		_, err = c.Database.connPool.Exec(ctx, minusIndexDef)
+		_, err = c.database.connPool.Exec(ctx, minusIndexDef)
 		if err != nil {
 			return err
 		}
@@ -252,15 +252,15 @@ func (c *CloneDdl) applyIndexes(ctx context.Context, prodTable *Table, plus *Tab
 	return nil
 }
 
-func (c *CloneDdl) applyRules(ctx context.Context, prodTable *Table, view *View) error {
-	for _, rule := range prodTable.Rules {
-		var viewRule Rule
-		viewRule.Name = "view_" + rule.Name
-		ruleDef := strings.ReplaceAll(strings.ToLower(rule.Definition), rule.Name, viewRule.Name)
+func (c *cloneDdl) applyRules(ctx context.Context, prodTable *table, view *view) error {
+	for _, r := range prodTable.Rules {
+		var viewRule rule
+		viewRule.Name = "view_" + r.Name
+		ruleDef := strings.ReplaceAll(strings.ToLower(r.Definition), r.Name, viewRule.Name)
 		ruleDef = strings.ReplaceAll(strings.ToLower(ruleDef), prodTable.Name, view.Name)
 		viewRule.Definition = ruleDef
 		view.Rules = append(view.Rules, viewRule)
-		_, err := c.Database.connPool.Exec(ctx, ruleDef)
+		_, err := c.database.connPool.Exec(ctx, ruleDef)
 		if err != nil {
 			return err
 		}

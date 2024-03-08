@@ -1,7 +1,7 @@
 package main
 
 import (
-	dbclone "bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbclone"
 	"context"
 	"fmt"
 	"os"
@@ -137,18 +137,16 @@ func switchRPlusRMinusCloning(dbPort string) error {
 
 	postgresdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/postgresdb?sslmode=disable", dbPort)
 
-	postgresCloneDatabase, err := dbclone.Clone(ctx, postgresdbUrl)
+	err := dbclone.Clone(ctx, postgresdbUrl)
 	if err != nil {
 		return err
 	}
-	defer postgresCloneDatabase.Close()
 
 	accountdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/accountsdb?sslmode=disable", dbPort)
-	accountsCloneDatabase, err := dbclone.Clone(ctx, accountdbUrl)
+	err = dbclone.Clone(ctx, accountdbUrl)
 	if err != nil {
 		return err
 	}
-	defer accountsCloneDatabase.Close()
 
 	return nil
 }

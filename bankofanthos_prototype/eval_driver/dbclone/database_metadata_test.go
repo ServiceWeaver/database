@@ -77,7 +77,7 @@ func TestListTableMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	database, err := NewDatabase(ctx, connPool)
+	database, err := newDatabase(ctx, connPool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,15 +88,15 @@ func TestListTableMetadata(t *testing.T) {
 		return out
 	})
 
-	idxOpt := cmp.Comparer(func(x, y Index) bool {
+	idxOpt := cmp.Comparer(func(x, y index) bool {
 		return x.Name == y.Name && reflect.DeepEqual(x.ColumnNames, y.ColumnNames) && reflect.DeepEqual(strings.Fields(strings.ToLower(x.IndexDef)), strings.Fields(strings.ToLower(y.IndexDef))) && x.IsUnique == y.IsUnique
 	})
 
-	ruleOpt := cmp.Comparer(func(x, y Rule) bool {
+	ruleOpt := cmp.Comparer(func(x, y rule) bool {
 		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.Definition)), strings.Fields(strings.ToLower(y.Definition)))
 	})
 
-	procOpt := cmp.Comparer(func(x, y Procedure) bool {
+	procOpt := cmp.Comparer(func(x, y procedure) bool {
 		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.ProSrc)), strings.Fields(strings.ToLower(y.ProSrc)))
 	})
 	t.Run("ListTables", func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestListTableMetadata(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := map[string]Column{
+		want := map[string]column{
 			"accountid": {
 				Name:                   "accountid",
 				DataType:               "character",
@@ -152,7 +152,7 @@ func TestListTableMetadata(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expectedIndexes := []Index{
+		expectedIndexes := []index{
 			{Name: "users_pkey", ColumnNames: []string{"accountid"}, IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", IsUnique: true},
 			{Name: "users_username_key", ColumnNames: []string{"username"}, IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true}}
 		if diff := cmp.Diff(expectedIndexes, indexes, idxOpt, sortStringSlice); diff != "" {
@@ -166,7 +166,7 @@ func TestListTableMetadata(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expectedRules := []Rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}}
+		expectedRules := []rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}}
 		if diff := cmp.Diff(expectedRules, rules, ruleOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -178,7 +178,7 @@ func TestListTableMetadata(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expectedConstraints := []ForeignKeyConstraint{
+		expectedConstraints := []foreignKeyConstraint{
 			{
 				ConstraintName: "contacts_username_fkey",
 				TableName:      "contacts",
@@ -221,13 +221,13 @@ func TestListTableMetadata(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := map[string]Trigger{"users_redirect_delete_trigger": {
+		expectedTriggers := map[string]trigger{"users_redirect_delete_trigger": {
 			Name:              "users_redirect_delete_trigger",
 			EventManipulation: "DELETE",
 			ActionStatement:   "EXECUTE FUNCTION users_redirect_delete()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "BEFORE",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "users_redirect_delete",
 				ProSrc: `
 				BEGIN
@@ -247,7 +247,7 @@ func TestListTableMetadata(t *testing.T) {
 	})
 
 	t.Run("GetDatabaseMetadata", func(t *testing.T) {
-		database, err := NewDatabase(ctx, connPool)
+		database, err := newDatabase(ctx, connPool)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -256,19 +256,19 @@ func TestListTableMetadata(t *testing.T) {
 			t.Errorf("Listed table count: got %d, want %d", got, want)
 		}
 
-		expectedUserTable := &Table{
+		expectedUserTable := &table{
 			Name: "users",
-			Cols: map[string]Column{
+			Cols: map[string]column{
 				"accountid": {Name: "accountid", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"},
 				"username":  {Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"},
 				"passhash":  {Name: "passhash", DataType: "bytea", Nullable: "NO"},
 				"birthday":  {Name: "birthday", DataType: "date", Nullable: "YES"},
 			},
-			Indexes: []Index{
+			Indexes: []index{
 				{Name: "users_pkey", ColumnNames: []string{"accountid"}, IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", IsUnique: true},
 				{Name: "users_username_key", ColumnNames: []string{"username"}, IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true}},
-			Rules: []Rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}},
-			References: []Reference{
+			Rules: []rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}},
+			References: []reference{
 				{ConstraintName: "contacts_username_fkey", BeRefedTableName: "users", BeRefedColumnName: "username", ForeignKeyTableName: "contacts", ForeignKeyColumnName: "username"},
 			},
 		}
@@ -276,14 +276,14 @@ func TestListTableMetadata(t *testing.T) {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
-		expectedContactTable := &Table{
+		expectedContactTable := &table{
 			Name: "contacts",
-			Cols: map[string]Column{
+			Cols: map[string]column{
 				"account_num": {Name: "account_num", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"},
 				"username":    {Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"},
 				"is_external": {Name: "is_external", DataType: "boolean", Nullable: "NO"},
 			},
-			ForeignKeyConstraints: []ForeignKeyConstraint{
+			ForeignKeyConstraints: []foreignKeyConstraint{
 				{
 					ConstraintName: "contacts_username_fkey", TableName: "contacts", ColumnName: "username", RefTableName: "users", RefColumnName: "username"},
 			},

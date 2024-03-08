@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-func createTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *ClonedTable) error {
+func createTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *clonedTable) error {
 	if err := createInsertTriggers(ctx, connPool, clonedTable); err != nil {
 		return fmt.Errorf("failed to create insert triggers: %w", err)
 	}
@@ -24,7 +24,7 @@ func createTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *Cl
 	return nil
 }
 
-func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *ClonedTable) error {
+func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *clonedTable) error {
 	var cols []string
 	var newCols []string
 	idGeneratorQuery := ""
@@ -110,7 +110,7 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	return nil
 }
 
-func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *ClonedTable) error {
+func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *clonedTable) error {
 	var cols []string
 	var newCols []string
 	var oldCols []string
@@ -201,7 +201,7 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	return nil
 }
 
-func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *ClonedTable) error {
+func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *clonedTable) error {
 	var cols []string
 	var oldCols []string
 	for colname := range clonedTable.Plus.Cols {

@@ -40,23 +40,23 @@ func TestQueryRewrite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	database, err := NewDatabase(ctx, connPool)
+	database, err := newDatabase(ctx, connPool)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	CloneDdl, err := NewCloneDdl(ctx, database)
+	cloneDdl, err := newCloneDdl(ctx, database)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	defer CloneDdl.Close(ctx)
+	defer cloneDdl.close(ctx)
 
-	procOpt := cmp.Comparer(func(x, y Procedure) bool {
+	procOpt := cmp.Comparer(func(x, y procedure) bool {
 		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.ProSrc)), strings.Fields(strings.ToLower(y.ProSrc)))
 	})
 	t.Run("InsertTriggersForUsers", func(t *testing.T) {
-		err = createInsertTriggers(ctx, connPool, CloneDdl.ClonedTables["users"])
+		err = createInsertTriggers(ctx, connPool, cloneDdl.clonedTables["users"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,13 +65,13 @@ func TestQueryRewrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := Trigger{
+		expectedTriggers := trigger{
 			Name:              "users_redirect_insert_trigger",
 			EventManipulation: "INSERT",
 			ActionStatement:   "EXECUTE FUNCTION users_redirect_insert()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "INSTEAD OF",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "users_redirect_insert",
 				ProSrc: `
 				BEGIN
@@ -95,7 +95,7 @@ func TestQueryRewrite(t *testing.T) {
 	})
 
 	t.Run("InsertTriggersForContacts", func(t *testing.T) {
-		err = createInsertTriggers(ctx, connPool, CloneDdl.ClonedTables["contacts"])
+		err = createInsertTriggers(ctx, connPool, cloneDdl.clonedTables["contacts"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -104,13 +104,13 @@ func TestQueryRewrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := Trigger{
+		expectedTriggers := trigger{
 			Name:              "contacts_redirect_insert_trigger",
 			EventManipulation: "INSERT",
 			ActionStatement:   "EXECUTE FUNCTION contacts_redirect_insert()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "INSTEAD OF",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "contacts_redirect_insert",
 				ProSrc: `
 				BEGIN
@@ -131,7 +131,7 @@ func TestQueryRewrite(t *testing.T) {
 	})
 
 	t.Run("UpdateTriggersForUsers", func(t *testing.T) {
-		err = createUpdateTriggers(ctx, connPool, CloneDdl.ClonedTables["users"])
+		err = createUpdateTriggers(ctx, connPool, cloneDdl.clonedTables["users"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,13 +140,13 @@ func TestQueryRewrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := Trigger{
+		expectedTriggers := trigger{
 			Name:              "users_redirect_update_trigger",
 			EventManipulation: "UPDATE",
 			ActionStatement:   "EXECUTE FUNCTION users_redirect_update()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "INSTEAD OF",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "users_redirect_update",
 				ProSrc: `
 				BEGIN
@@ -173,7 +173,7 @@ func TestQueryRewrite(t *testing.T) {
 	})
 
 	t.Run("UpdateTriggersForContacts", func(t *testing.T) {
-		err = createUpdateTriggers(ctx, connPool, CloneDdl.ClonedTables["contacts"])
+		err = createUpdateTriggers(ctx, connPool, cloneDdl.clonedTables["contacts"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -182,13 +182,13 @@ func TestQueryRewrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := Trigger{
+		expectedTriggers := trigger{
 			Name:              "contacts_redirect_update_trigger",
 			EventManipulation: "UPDATE",
 			ActionStatement:   "EXECUTE FUNCTION contacts_redirect_update()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "INSTEAD OF",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "contacts_redirect_update",
 				ProSrc: `
 				BEGIN
@@ -209,7 +209,7 @@ func TestQueryRewrite(t *testing.T) {
 	})
 
 	t.Run("DeleteTriggersForUsers", func(t *testing.T) {
-		err = createDeleteTriggers(ctx, connPool, CloneDdl.ClonedTables["users"])
+		err = createDeleteTriggers(ctx, connPool, cloneDdl.clonedTables["users"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -218,13 +218,13 @@ func TestQueryRewrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := Trigger{
+		expectedTriggers := trigger{
 			Name:              "users_redirect_delete_trigger",
 			EventManipulation: "DELETE",
 			ActionStatement:   "EXECUTE FUNCTION users_redirect_delete()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "INSTEAD OF",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "users_redirect_delete",
 				ProSrc: `
 				BEGIN
@@ -244,7 +244,7 @@ func TestQueryRewrite(t *testing.T) {
 	})
 
 	t.Run("DeleteTriggersForContacts", func(t *testing.T) {
-		err = createDeleteTriggers(ctx, connPool, CloneDdl.ClonedTables["contacts"])
+		err = createDeleteTriggers(ctx, connPool, cloneDdl.clonedTables["contacts"])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -253,13 +253,13 @@ func TestQueryRewrite(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		expectedTriggers := Trigger{
+		expectedTriggers := trigger{
 			Name:              "contacts_redirect_delete_trigger",
 			EventManipulation: "DELETE",
 			ActionStatement:   "EXECUTE FUNCTION contacts_redirect_delete()",
 			ActionOrientation: "ROW",
 			ActionTiming:      "INSTEAD OF",
-			Procedure: &Procedure{
+			Procedure: &procedure{
 				Name: "contacts_redirect_delete",
 				ProSrc: `
 				BEGIN
