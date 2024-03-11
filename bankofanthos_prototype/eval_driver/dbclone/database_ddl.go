@@ -155,7 +155,8 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 		Cols: map[string]column{},
 	}
 
-	minus := &table{Name: prodTable.Name + "minus",
+	minus := &table{
+		Name: prodTable.Name + "minus",
 		Cols: map[string]column{},
 	}
 
