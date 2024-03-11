@@ -84,6 +84,10 @@ CREATE OR REPLACE FUNCTION transactions_redirect_update()
 AS $$
 BEGIN
   RAISE NOTICE 'Trigger transactions_redirect_update executed for new transaction_id % old transaction_id %', NEW.transaction_id,OLD.transaction_id;
+  IF EXISTS (SELECT * FROM transactions WHERE transaction_id = NEW.transaction_id) AND NEW.transaction_id != OLD.transaction_id THEN
+    RAISE EXCEPTION 'transaction id already exists %', NEW.transaction_id;
+  END IF;
+
   INSERT INTO transactionsminus (transaction_id, from_acct, to_acct,from_route,to_route,amount,timestamp) 
   VALUES (OLD.transaction_id, OLD.from_acct,OLD.to_acct,OLD.from_route,OLD.to_route,OLD.amount,OLD.timestamp);
 

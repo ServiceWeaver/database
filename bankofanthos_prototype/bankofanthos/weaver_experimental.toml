@@ -22,6 +22,7 @@ data_source_url = "postgresql://admin:admin@localhost:55432/postgresdb?sslmode=d
 account_db_uri = "postgresql://admin:admin@localhost:55432/accountsdb?sslmode=disable"
 public_key_path = "/tmp/.ssh/jwtRS256.key.pub"
 local_routing_num = "883745000"
+account_id_length = 12
 
 ["bankofanthos_prototype/bankofanthos/ledgerwriter/T"]
 local_routing_num = "883745000"

@@ -34,6 +34,7 @@ type config struct {
 	AccountDBURI    string `toml:"account_db_uri"`
 	PublicKeyPath   string `toml:"public_key_path"`
 	LocalRoutingNum string `toml:"local_routing_num"`
+	AccountIdLength int64  `toml:"account_id_length"`
 }
 
 type impl struct {
@@ -78,10 +79,20 @@ func (i *impl) AddContact(ctx context.Context, authenticatedAccountID string, co
 }
 
 func (i *impl) validateNewContact(contact Contact) error {
-	// Validate account number (must be 10 digits).
-	if !regexp.MustCompile(`\A[0-9]{10}\z`).MatchString(contact.AccountNum) {
-		return fmt.Errorf("invalid account number: %v", contact.AccountNum)
+	// [BUG]backward compatible with baseline
+	if i.Config().AccountIdLength == 12 {
+		if len(contact.AccountNum) == 10 {
+			contact.AccountNum = "00" + contact.AccountNum
+		}
+		if !regexp.MustCompile(`\A[0-9]{12}\z`).MatchString(contact.AccountNum) {
+			return fmt.Errorf("invalid account number: %v", contact.AccountNum)
+		}
+	} else {
+		if !regexp.MustCompile(`\A[0-9]{10}\z`).MatchString(contact.AccountNum) {
+			return fmt.Errorf("invalid account number: %v", contact.AccountNum)
+		}
 	}
+	// end of [BUG]
 
 	// Validate routing number (must be 9 digits).
 	if !regexp.MustCompile(`\A[0-9]{9}\z`).MatchString(contact.RoutingNum) {
