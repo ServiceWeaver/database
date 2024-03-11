@@ -150,11 +150,14 @@ func (c *cloneDdl) dropView(ctx context.Context, name string) error {
 
 // TODO: Pick name for views and plus, minus which does not exist in database
 func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table) (*table, *table, *view, error) {
-	plus := &table{Name: prodTable.Name + "plus"}
-	plus.Cols = map[string]column{}
+	plus := &table{
+		Name: prodTable.Name + "plus",
+		Cols: map[string]column{},
+	}
 
-	minus := &table{Name: prodTable.Name + "minus"}
-	minus.Cols = map[string]column{}
+	minus := &table{Name: prodTable.Name + "minus",
+		Cols: map[string]column{},
+	}
 
 	var columnslst []string
 	for name, col := range prodTable.Cols {
@@ -188,8 +191,8 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 
 	view := &view{
 		Name: prodTable.Name + "view",
+		Cols: map[string]column{},
 	}
-	view.Cols = map[string]column{}
 
 	// for views, column is always nullable. No constraint is enforced on the view itself, but on the underlying tables.
 	var colnames []string

@@ -296,19 +296,19 @@ func (d *database) getForeignKeyConstraints(ctx context.Context) ([]foreignKeyCo
 	constraintsMap := make(map[string]foreignKeyConstraint)
 	rows, err := d.connPool.Query(
 		ctx, `
-		SELECT
-		c.constraint_name
-		, x.table_name
-		, x.column_name
-		, y.table_name as referenced_table_name
-		, y.column_name as referenced_column_name
-	from information_schema.referential_constraints c
-	join information_schema.key_column_usage x
+	SELECT
+		c.constraint_name, 
+		x.table_name,
+		x.column_name,
+		y.table_name as referenced_table_name,
+		y.column_name as referenced_column_name
+	FROM information_schema.referential_constraints c
+	JOIN information_schema.key_column_usage x
 		on x.constraint_name = c.constraint_name
-	join information_schema.key_column_usage y
+	JOIN information_schema.key_column_usage y
 		on y.ordinal_position = x.position_in_unique_constraint
 		and y.constraint_name = c.unique_constraint_name
-	order by c.constraint_name, x.ordinal_position;`)
+	ORDER BY c.constraint_name, x.ordinal_position;`)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func (d *database) getForeignKeyConstraints(ctx context.Context) ([]foreignKeyCo
 			constraint.ColumnNames = append(constraint.ColumnNames, columnName)
 			constraint.RefColumnNames = append(constraint.RefColumnNames, refColumnName)
 			if refTableName != constraint.RefTableName || tableName != constraint.TableName {
-				return nil, fmt.Errorf("Same constraint name %s contains different table/ref tables name.", constraintName)
+				return nil, fmt.Errorf("same constraint name %s contains different table/ref tables name", constraintName)
 			}
 			constraintsMap[constraintName] = constraint
 		} else {
