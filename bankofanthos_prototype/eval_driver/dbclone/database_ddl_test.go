@@ -2,10 +2,6 @@ package dbclone
 
 import (
 	"context"
-	"reflect"
-	"slices"
-	"sort"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -21,37 +17,7 @@ func TestCreateCloneDatabase(t *testing.T) {
 	}
 	defer dbContainer.Terminate(ctx)
 
-	sortStringSlice := cmp.Transformer("Sort", func(table []string) []string {
-		out := slices.Clone(table)
-		sort.Strings(out)
-		return out
-	})
-
-	idxOpt := cmp.Comparer(func(x, y index) bool {
-		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.IndexDef)), strings.Fields(strings.ToLower(y.IndexDef))) && x.IsUnique == y.IsUnique
-	})
-
-	ruleOpt := cmp.Comparer(func(x, y rule) bool {
-		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.Definition)), strings.Fields(strings.ToLower(y.Definition)))
-	})
-
-	_, err = connPool.Exec(ctx, `
-	CREATE TABLE IF NOT EXISTS users (
-		accountid CHAR(12)    PRIMARY KEY,
-		username  VARCHAR(64) UNIQUE NOT NULL,
-		passhash  BYTEA       NOT NULL,
-		birthday  DATE       
-	);
-
-	CREATE TABLE IF NOT EXISTS contacts (
-		username    VARCHAR(64)  NOT NULL,
-		account_num CHAR(12)     NOT NULL,
-		is_external BOOLEAN      NOT NULL,
-		FOREIGN KEY (username) REFERENCES users(username)
-	  );		  
-
-	CREATE RULE PREVENT_UPDATE AS ON UPDATE TO users DO INSTEAD NOTHING;
-	`)
+	err = createTables(ctx, connPool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,9 +48,9 @@ func TestCreateCloneDatabase(t *testing.T) {
 					{
 						ConstraintName: "contacts_username_fkey",
 						TableName:      "contacts",
-						ColumnName:     "username",
+						ColumnNames:    []string{"username"},
 						RefTableName:   "users",
-						RefColumnName:  "username"},
+						RefColumnNames: []string{"username"}},
 				},
 			},
 			Plus: &table{
@@ -123,11 +89,11 @@ func TestCreateCloneDatabase(t *testing.T) {
 					"birthday":  {Name: "birthday", DataType: "date", Nullable: "YES"},
 				},
 				Indexes: []index{
-					{Name: "users_pkey", IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", IsUnique: true},
-					{Name: "users_username_key", IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true}},
+					{Name: "users_pkey", IndexDef: "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (accountid)", IsUnique: true, ColumnNames: []string{"accountid"}},
+					{Name: "users_username_key", IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true, ColumnNames: []string{"username"}}},
 				Rules: []rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}},
 				References: []reference{
-					{ConstraintName: "contacts_username_fkey", BeRefedTableName: "users", BeRefedColumnName: "username", ForeignKeyTableName: "contacts", ForeignKeyColumnName: "username"},
+					{ConstraintName: "contacts_username_fkey", BeRefedTableName: "users", BeRefedColumnNames: []string{"username"}, ForeignKeyTableName: "contacts", ForeignKeyColumnNames: []string{"username"}},
 				},
 			},
 			Plus: &table{

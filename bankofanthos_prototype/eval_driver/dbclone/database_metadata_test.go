@@ -15,9 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func SetupTestDatabase(
-	ctx context.Context,
-) (testcontainers.Container, *pgxpool.Pool, string, error) {
+func SetupTestDatabase(ctx context.Context) (testcontainers.Container, *pgxpool.Pool, string, error) {
 	dbContainer, err := postgres.RunContainer(
 		ctx,
 		testcontainers.WithImage("docker.io/postgres:16-alpine"),
@@ -46,17 +44,25 @@ func SetupTestDatabase(
 	return dbContainer, connPool, dbURL, nil
 }
 
-func TestListTableMetadata(t *testing.T) {
-	ctx := context.Background()
+var sortStringSlice = cmp.Transformer("Sort", func(table []string) []string {
+	out := append([]string(nil), table...)
+	sort.Strings(out)
+	return out
+})
+var idxOpt = cmp.Comparer(func(x, y index) bool {
+	return x.Name == y.Name && reflect.DeepEqual(x.ColumnNames, y.ColumnNames) && reflect.DeepEqual(strings.Fields(strings.ToLower(x.IndexDef)), strings.Fields(strings.ToLower(y.IndexDef))) && x.IsUnique == y.IsUnique
+})
 
-	// Setup database
-	dbContainer, connPool, _, err := SetupTestDatabase(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dbContainer.Terminate(ctx)
+var ruleOpt = cmp.Comparer(func(x, y rule) bool {
+	return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.Definition)), strings.Fields(strings.ToLower(y.Definition)))
+})
 
-	_, err = connPool.Exec(ctx, `
+var procOpt = cmp.Comparer(func(x, y procedure) bool {
+	return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.ProSrc)), strings.Fields(strings.ToLower(y.ProSrc)))
+})
+
+func createTables(ctx context.Context, connPool *pgxpool.Pool) error {
+	_, err := connPool.Exec(ctx, `
 	CREATE TABLE IF NOT EXISTS users (
 		accountid CHAR(12)    PRIMARY KEY,
 		username  VARCHAR(64) UNIQUE NOT NULL,
@@ -73,32 +79,37 @@ func TestListTableMetadata(t *testing.T) {
 
 	CREATE RULE PREVENT_UPDATE AS ON UPDATE TO users DO INSTEAD NOTHING;
 	`)
+	return err
+}
+
+func dropTables(ctx context.Context, connPool *pgxpool.Pool) error {
+	_, err := connPool.Exec(ctx, `
+	DROP TABLE contacts;
+	DROP TABLE users;
+	`)
+	return err
+}
+
+func TestListTableMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	// Setup database
+	dbContainer, connPool, _, err := SetupTestDatabase(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer dbContainer.Terminate(ctx)
 
 	database, err := newDatabase(ctx, connPool)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	sortStringSlice := cmp.Transformer("Sort", func(table []string) []string {
-		out := append([]string(nil), table...)
-		sort.Strings(out)
-		return out
-	})
+	err = createTables(ctx, connPool)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	idxOpt := cmp.Comparer(func(x, y index) bool {
-		return x.Name == y.Name && reflect.DeepEqual(x.ColumnNames, y.ColumnNames) && reflect.DeepEqual(strings.Fields(strings.ToLower(x.IndexDef)), strings.Fields(strings.ToLower(y.IndexDef))) && x.IsUnique == y.IsUnique
-	})
-
-	ruleOpt := cmp.Comparer(func(x, y rule) bool {
-		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.Definition)), strings.Fields(strings.ToLower(y.Definition)))
-	})
-
-	procOpt := cmp.Comparer(func(x, y procedure) bool {
-		return x.Name == y.Name && reflect.DeepEqual(strings.Fields(strings.ToLower(x.ProSrc)), strings.Fields(strings.ToLower(y.ProSrc)))
-	})
 	t.Run("ListTables", func(t *testing.T) {
 		tables, err := database.listTables(ctx)
 		if err != nil {
@@ -182,19 +193,18 @@ func TestListTableMetadata(t *testing.T) {
 			{
 				ConstraintName: "contacts_username_fkey",
 				TableName:      "contacts",
-				ColumnName:     "username",
+				ColumnNames:    []string{"username"},
 				RefTableName:   "users",
-				RefColumnName:  "username"},
+				RefColumnNames: []string{"username"},
+			},
 		}
 
 		if diff := cmp.Diff(expectedConstraints, contraints, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
-
 	})
 
 	t.Run("GetTableTriggers", func(t *testing.T) {
-
 		_, err = connPool.Exec(ctx, `
 		CREATE OR REPLACE FUNCTION users_redirect_delete()
 		RETURNS TRIGGER
@@ -269,7 +279,7 @@ func TestListTableMetadata(t *testing.T) {
 				{Name: "users_username_key", ColumnNames: []string{"username"}, IndexDef: "CREATE UNIQUE INDEX users_username_key ON public.users USING btree (username)", IsUnique: true}},
 			Rules: []rule{{Name: "prevent_update", Definition: "CREATE RULE prevent_update AS ON UPDATE TO public.users DO INSTEAD NOTHING;"}},
 			References: []reference{
-				{ConstraintName: "contacts_username_fkey", BeRefedTableName: "users", BeRefedColumnName: "username", ForeignKeyTableName: "contacts", ForeignKeyColumnName: "username"},
+				{ConstraintName: "contacts_username_fkey", BeRefedTableName: "users", BeRefedColumnNames: []string{"username"}, ForeignKeyTableName: "contacts", ForeignKeyColumnNames: []string{"username"}},
 			},
 		}
 		if diff := cmp.Diff(expectedUserTable, database.Tables["users"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
@@ -285,7 +295,7 @@ func TestListTableMetadata(t *testing.T) {
 			},
 			ForeignKeyConstraints: []foreignKeyConstraint{
 				{
-					ConstraintName: "contacts_username_fkey", TableName: "contacts", ColumnName: "username", RefTableName: "users", RefColumnName: "username"},
+					ConstraintName: "contacts_username_fkey", TableName: "contacts", ColumnNames: []string{"username"}, RefTableName: "users", RefColumnNames: []string{"username"}},
 			},
 		}
 		if diff := cmp.Diff(expectedContactTable, database.Tables["contacts"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
@@ -293,4 +303,54 @@ func TestListTableMetadata(t *testing.T) {
 		}
 	})
 
+	err = dropTables(ctx, connPool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("GetCompositeForeignConstraint", func(t *testing.T) {
+		_, err = connPool.Exec(ctx, `
+		CREATE TABLE testa (
+			a INT,
+			b CHAR
+		  );
+		  
+		ALTER TABLE testa ADD PRIMARY KEY (a,b);
+		
+		CREATE TABLE testb (
+			c INT,
+			d CHAR,
+		FOREIGN KEY (c,d) REFERENCES testa(a,b)
+		);
+		  `)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		contraints, err := database.getForeignKeyConstraints(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectedConstraints := []foreignKeyConstraint{
+			{
+				ConstraintName: "testb_c_d_fkey",
+				TableName:      "testb",
+				ColumnNames:    []string{"c", "d"},
+				RefTableName:   "testa",
+				RefColumnNames: []string{"a", "b"},
+			},
+		}
+
+		if diff := cmp.Diff(expectedConstraints, contraints, sortStringSlice); diff != "" {
+			t.Errorf("(-want,+got):\n%s", diff)
+		}
+
+		_, err = connPool.Exec(ctx, `
+		DROP TABLE testb;
+		DROP TABLE testa;`)
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
 }

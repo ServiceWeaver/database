@@ -17,6 +17,7 @@ type idGenerator struct {
 	IdentityMaximum    int64
 	IdentityMinimum    int64
 }
+
 type column struct {
 	Name                   string
 	DataType               string
@@ -34,21 +35,21 @@ type index struct {
 
 // a BeRefedTableName(BeRefedColumnName) is referenced by ForeignKeyTableName(ForeignKeyColumnName)
 type reference struct {
-	ConstraintName       string
-	BeRefedTableName     string
-	BeRefedColumnName    string
-	ForeignKeyTableName  string
-	ForeignKeyColumnName string
-	Action               string // TODO: Get actions from table metadata.Set default to no action
+	ConstraintName        string
+	BeRefedTableName      string
+	BeRefedColumnNames    []string
+	ForeignKeyTableName   string
+	ForeignKeyColumnNames []string
+	Action                string // TODO: Get actions from table metadata.Set default to no action
 }
 
 // a TableName(ColumnName) has a foreign key constraint which refers another RefTableName(RefColumnName)
 type foreignKeyConstraint struct {
 	ConstraintName string
 	TableName      string
-	ColumnName     string
+	ColumnNames    []string
 	RefTableName   string
-	RefColumnName  string
+	RefColumnNames []string
 	Action         string // TODO: Get actions from table metadata. set default to no action
 }
 
@@ -61,6 +62,7 @@ type procedure struct {
 	Name   string
 	ProSrc string
 }
+
 type trigger struct {
 	Name              string
 	EventManipulation string // INSERT, DELETE, UPDATE
@@ -92,21 +94,15 @@ type database struct {
 	connPool *pgxpool.Pool
 }
 
-func newDatabase(
-	ctx context.Context,
-	connPool *pgxpool.Pool,
-) (*database, error) {
+func newDatabase(ctx context.Context, connPool *pgxpool.Pool) (*database, error) {
 	Tables := map[string]*table{}
 	database := &database{
 		connPool: connPool,
 		Tables:   Tables,
 	}
 	err := database.getDatabaseMetadata(ctx)
-	if err != nil {
-		return nil, err
-	}
 
-	return database, nil
+	return database, err
 }
 
 func (d *database) getDatabaseMetadata(ctx context.Context) error {
@@ -132,11 +128,11 @@ func (d *database) getDatabaseMetadata(ctx context.Context) error {
 
 		refTable := d.Tables[constraint.RefTableName]
 		refTable.References = append(refTable.References, reference{
-			ConstraintName:       constraint.ConstraintName,
-			BeRefedTableName:     constraint.RefTableName,
-			BeRefedColumnName:    constraint.RefColumnName,
-			ForeignKeyTableName:  constraint.TableName,
-			ForeignKeyColumnName: constraint.ColumnName})
+			ConstraintName:        constraint.ConstraintName,
+			BeRefedTableName:      constraint.RefTableName,
+			BeRefedColumnNames:    constraint.RefColumnNames,
+			ForeignKeyTableName:   constraint.TableName,
+			ForeignKeyColumnNames: constraint.ColumnNames})
 	}
 
 	return nil
@@ -297,32 +293,46 @@ func (d *database) getTableRules(ctx context.Context, tablename string) ([]rule,
 }
 
 func (d *database) getForeignKeyConstraints(ctx context.Context) ([]foreignKeyConstraint, error) {
-	var constraints []foreignKeyConstraint
+	constraintsMap := make(map[string]foreignKeyConstraint)
 	rows, err := d.connPool.Query(
 		ctx, `
-		SELECT                                                                                           
-		tc.constraint_name, 
-		tc.table_name, 
-		kcu.column_name, 
-		ccu.table_name AS referenced_table_name,
-		ccu.column_name AS referenced_column_name 
-	FROM 
-		information_schema.table_constraints AS tc 
-		JOIN information_schema.key_column_usage AS kcu
-		ON tc.constraint_name = kcu.constraint_name
-		JOIN information_schema.constraint_column_usage AS ccu
-		ON ccu.constraint_name = tc.constraint_name
-	WHERE constraint_type = 'FOREIGN KEY'; `)
+		SELECT
+		c.constraint_name
+		, x.table_name
+		, x.column_name
+		, y.table_name as referenced_table_name
+		, y.column_name as referenced_column_name
+	from information_schema.referential_constraints c
+	join information_schema.key_column_usage x
+		on x.constraint_name = c.constraint_name
+	join information_schema.key_column_usage y
+		on y.ordinal_position = x.position_in_unique_constraint
+		and y.constraint_name = c.unique_constraint_name
+	order by c.constraint_name, x.ordinal_position;`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	for rows.Next() {
-		var constraint foreignKeyConstraint
-		if err := rows.Scan(&constraint.ConstraintName, &constraint.TableName, &constraint.ColumnName, &constraint.RefTableName, &constraint.RefColumnName); err != nil {
+		var constraintName, tableName, columnName, refTableName, refColumnName string
+		if err := rows.Scan(&constraintName, &tableName, &columnName, &refTableName, &refColumnName); err != nil {
 			return nil, err
 		}
+		if constraint, ok := constraintsMap[constraintName]; ok {
+			constraint.ColumnNames = append(constraint.ColumnNames, columnName)
+			constraint.RefColumnNames = append(constraint.RefColumnNames, refColumnName)
+			if refTableName != constraint.RefTableName || tableName != constraint.TableName {
+				return nil, fmt.Errorf("Same constraint name %s contains different table/ref tables name.", constraintName)
+			}
+			constraintsMap[constraintName] = constraint
+		} else {
+			constraintsMap[constraintName] = foreignKeyConstraint{ConstraintName: constraintName, TableName: tableName, ColumnNames: []string{columnName}, RefTableName: refTableName, RefColumnNames: []string{refColumnName}}
+		}
+
+	}
+
+	var constraints []foreignKeyConstraint
+	for _, constraint := range constraintsMap {
 		constraints = append(constraints, constraint)
 	}
 

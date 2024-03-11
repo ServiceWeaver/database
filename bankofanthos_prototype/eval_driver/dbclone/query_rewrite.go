@@ -57,28 +57,30 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	// check unique columns
 	for _, index := range clonedTable.Snapshot.Indexes {
 		if index.IsUnique {
-			storedProcedureQuery += fmt.Sprintf(`
-	IF EXISTS (SELECT * FROM %s WHERE `, clonedTable.View.Name)
-			colLen := len(index.ColumnNames)
-			for i, col := range index.ColumnNames {
-				if i < colLen-1 {
-					storedProcedureQuery += fmt.Sprintf("%s = New.%s AND", col, col)
-				} else if i == colLen-1 {
-					storedProcedureQuery += fmt.Sprintf(`%s = New.%s) THEN
-	RAISE EXCEPTION 'column %% already exists', NEW.%s;
-	END IF;`, col, col, strings.Join(index.ColumnNames, ","))
-				}
+			var newColumns []string
+			for _, col := range index.ColumnNames {
+				newColumns = append(newColumns, "NEW."+col)
 			}
+			storedProcedureQuery += fmt.Sprintf(`
+	IF EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) THEN
+		RAISE EXCEPTION 'column %% already exists', %s;
+	END IF;`, clonedTable.View.Name, strings.Join(index.ColumnNames, ","), strings.Join(newColumns, ","), strings.Join(newColumns, ","))
 		}
 	}
 
 	// if it has foreign key, check if the key exists in reference table
 	for _, constraint := range clonedTable.Snapshot.ForeignKeyConstraints {
+		//TODO: check if foreign key constraint is valid, for example, sometimes refer to the same table
 		if constraint.RefTableName != constraint.TableName {
+			var newRefColumns []string
+			for _, col := range constraint.RefColumnNames {
+				newRefColumns = append(newRefColumns, "NEW."+col)
+			}
 			storedProcedureQuery += fmt.Sprintf(`
-	IF NOT EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
-	RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in %s table';
-	END IF;`, constraint.RefTableName, constraint.RefColumnName, constraint.RefColumnName, constraint.RefTableName)
+				IF NOT EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) THEN
+				RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in %s table';
+				END IF;`, constraint.RefTableName, strings.Join(constraint.RefColumnNames, ","), strings.Join(newRefColumns, ","), constraint.RefTableName)
+
 		}
 	}
 
@@ -132,44 +134,50 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 
 	for _, index := range clonedTable.Snapshot.Indexes {
 		if index.IsUnique {
-			storedProcedureQuery += fmt.Sprintf(`
-	IF EXISTS (SELECT * FROM %s WHERE `, clonedTable.View.Name)
-
-			compareStr := ""
-			colLen := len(index.ColumnNames)
-			for i, col := range index.ColumnNames {
-				if i < colLen-1 {
-					storedProcedureQuery += fmt.Sprintf("%s = New.%s AND", col, col)
-					compareStr += fmt.Sprintf(" AND NEW.%s != OLD.%s", col, col)
-				} else {
-					storedProcedureQuery += fmt.Sprintf(`%s = New.%s)%s AND NEW.%s != OLD.%s THEN
-	RAISE EXCEPTION 'column %% already exists', NEW.%s;
-	END IF;`, col, col, compareStr, col, col, strings.Join(index.ColumnNames, ","))
-				}
+			var newColumns []string
+			var oldColumns []string
+			for _, col := range index.ColumnNames {
+				newColumns = append(newColumns, "NEW."+col)
+				oldColumns = append(oldColumns, "OLD."+col)
 			}
-
+			storedProcedureQuery += fmt.Sprintf(`
+	IF EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) AND (%s) != (%s) THEN
+		RAISE EXCEPTION 'column %% already exists', %s;
+	END IF;`, clonedTable.View.Name, strings.Join(index.ColumnNames, ","), strings.Join(newColumns, ","), strings.Join(newColumns, ","), strings.Join(oldColumns, ","), strings.Join(newColumns, ","))
 		}
 	}
 
 	// if it has foreign key, check if the key exists in reference table
 	for _, constraint := range clonedTable.Snapshot.ForeignKeyConstraints {
 		if constraint.RefTableName != constraint.TableName {
+			var newRefColumns []string
+			for _, col := range constraint.RefColumnNames {
+				newRefColumns = append(newRefColumns, "NEW."+col)
+			}
 			storedProcedureQuery += fmt.Sprintf(`
-	IF NOT EXISTS (SELECT * FROM %s WHERE %s = NEW.%s) THEN
+	IF NOT EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) THEN
 		RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in %s table';
-	END IF;`, constraint.RefTableName, constraint.RefColumnName, constraint.RefColumnName, constraint.RefTableName)
+	END IF;`, constraint.RefTableName, strings.Join(constraint.RefColumnNames, ","), strings.Join(newRefColumns, ","), constraint.RefTableName)
 		}
-
 	}
 
 	// TODO: Add other foreign key actions
 	// check if the key is referenced by other table
 	for _, ref := range clonedTable.Snapshot.References {
 		if ref.Action == "" {
+			if len(ref.ForeignKeyColumnNames) != len(ref.BeRefedColumnNames) {
+				return fmt.Errorf("different length for forign key column names %v and be refed columns names %v", ref.ForeignKeyColumnNames, ref.BeRefedColumnNames)
+			}
+			var oldRefColumns []string
+			var newRefColumns []string
+			for _, col := range ref.BeRefedColumnNames {
+				oldRefColumns = append(oldRefColumns, "OLD."+col)
+				newRefColumns = append(newRefColumns, "NEW."+col)
+			}
 			storedProcedureQuery += fmt.Sprintf(`
-	IF EXISTS (SELECT * FROM %s WHERE %s = OLD.%s) AND NEW.%s != old.%s THEN
+	IF EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) AND (%s) != (%s) THEN
 		RAISE EXCEPTION 'violates foreign key constraint';
-	END IF;`, ref.ForeignKeyTableName, ref.ForeignKeyColumnName, ref.BeRefedColumnName, ref.BeRefedColumnName, ref.BeRefedColumnName)
+	END IF;`, ref.ForeignKeyTableName, strings.Join(ref.ForeignKeyColumnNames, ","), strings.Join(oldRefColumns, ","), strings.Join(newRefColumns, ","), strings.Join(oldRefColumns, ","))
 		}
 	}
 
@@ -222,11 +230,19 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	// check if the key is referenced by other table
 	for _, ref := range clonedTable.Snapshot.References {
 		if ref.Action == "" {
+			if len(ref.ForeignKeyColumnNames) != len(ref.BeRefedColumnNames) {
+				return fmt.Errorf("different length for forign key column names %v and be refed columns names %v", ref.ForeignKeyColumnNames, ref.BeRefedColumnNames)
+			}
+			var oldRefColumns []string
+			for _, col := range ref.BeRefedColumnNames {
+				oldRefColumns = append(oldRefColumns, "OLD."+col)
+			}
 			storedProcedureQuery += fmt.Sprintf(`
-	IF EXISTS (SELECT * FROM %s WHERE %s = OLD.%s) THEN
+	IF EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) THEN
 		RAISE EXCEPTION 'violates foreign key constraint';
-	END IF;`, ref.ForeignKeyTableName, ref.ForeignKeyColumnName, ref.BeRefedColumnName)
+	END IF;`, ref.ForeignKeyTableName, strings.Join(ref.ForeignKeyColumnNames, ","), strings.Join(oldRefColumns, ","))
 		}
+
 	}
 
 	storedProcedureQuery += fmt.Sprintf(`

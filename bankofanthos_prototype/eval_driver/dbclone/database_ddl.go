@@ -150,14 +150,10 @@ func (c *cloneDdl) dropView(ctx context.Context, name string) error {
 
 // TODO: Pick name for views and plus, minus which does not exist in database
 func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table) (*table, *table, *view, error) {
-	plus := &table{
-		Name: prodTable.Name + "plus",
-	}
+	plus := &table{Name: prodTable.Name + "plus"}
 	plus.Cols = map[string]column{}
 
-	minus := &table{
-		Name: prodTable.Name + "minus",
-	}
+	minus := &table{Name: prodTable.Name + "minus"}
 	minus.Cols = map[string]column{}
 
 	var columnslst []string
