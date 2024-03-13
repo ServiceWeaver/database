@@ -1,7 +1,8 @@
-package main
+package diff
 
 import (
 	"bankofanthos_prototype/eval_driver/pb"
+	"bankofanthos_prototype/eval_driver/service"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,8 +14,11 @@ import (
 )
 
 var (
-	fromFile = "baseline"
-	toFile   = "comparison"
+	fromFile              = "baseline"
+	toFile                = "comparison"
+	nonDeterministicField = "nondeterministic/"
+	databaseType          = "database"
+	responseType          = "response"
 )
 
 // checkLine checks each row to find non-deterministic column
@@ -47,7 +51,7 @@ func checkLine(baseline, experimental []string, idx int) ([]*pb.RowInfo, error) 
 }
 
 // getDiffHelper parses diff result in protobuf format
-func getDiffHelper(result string, compareType string) (*pb.DiffInfos, error) {
+func getDiffHelper(result string) (*pb.DiffInfos, error) {
 	diffInfos := &pb.DiffInfos{}
 	diffLines := strings.Split(result, "\n")
 	for i := 0; i < len(diffLines); i++ {
@@ -130,7 +134,7 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 	}
 
 	// parse the result, get the lines and columns for the non-deterministic field
-	diffInfos, err := getDiffHelper(result, compareType)
+	diffInfos, err := getDiffHelper(result)
 	if err != nil {
 		return err
 	}
@@ -155,15 +159,15 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 	return nil
 }
 
-func getNonDeterministic(baselineService1, baselineService2 Service) error {
+func GetNonDeterministic(baselineService1, baselineService2 service.Service) error {
 	// get database diff
-	err := getNonDeterministicInfo(baselineService1.dumpDbPath, baselineService2.dumpDbPath, databaseType)
+	err := getNonDeterministicInfo(baselineService1.DumpDbPath, baselineService2.DumpDbPath, databaseType)
 	if err != nil {
 		return err
 	}
 
 	// get response diff
-	err = getNonDeterministicInfo(baselineService1.outputPath, baselineService2.outputPath, responseType)
+	err = getNonDeterministicInfo(baselineService1.OutputPath, baselineService2.OutputPath, responseType)
 	if err != nil {
 		return err
 	}
@@ -173,7 +177,7 @@ func getNonDeterministic(baselineService1, baselineService2 Service) error {
 
 // outputEq compares two files content, print out the diff and return
 // a equal bool.
-func outputEq(path1 string, path2 string, compareType string) (bool, error) {
+func OutputEq(path1 string, path2 string, compareType string) (bool, error) {
 	output1, err := os.ReadFile(path1)
 	if err != nil {
 		return false, err
@@ -211,7 +215,7 @@ func outputEq(path1 string, path2 string, compareType string) (bool, error) {
 		return true, nil
 	}
 
-	experimentalDiff, err := getDiffHelper(result, compareType)
+	experimentalDiff, err := getDiffHelper(result)
 	if err != nil {
 		return false, err
 	}

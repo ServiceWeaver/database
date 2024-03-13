@@ -6,6 +6,9 @@ import (
 	"log"
 	"os"
 
+	"bankofanthos_prototype/eval_driver/diff"
+	"bankofanthos_prototype/eval_driver/service"
+
 	"github.com/gookit/color"
 )
 
@@ -15,6 +18,7 @@ var (
 	configPath            = "configs/"
 	logPath               = "logs/"
 	outPath               = "out/"
+	snapshotPath          = "snapshot/"
 	v1Config              = "../bankofanthos/weaver.toml"
 	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
@@ -22,17 +26,9 @@ var (
 	responseType          = "response"
 )
 
-// ProdService defines binary will be running in prod
-type ProdService struct {
-	configPath string
-	dbPort     string
-	bin        string
-	listenPort string
-}
-
 // requestsPorts generates traffic pattern, each request will be directed to either baseline service port
 // or experimental service port
-func requestsPorts(l listOfReqs, numOfRuns int, baseListenPort, expListenPort string) ([][]string, error) {
+func requestsPorts(l service.ListOfReqs, numOfRuns int, baseListenPort, expListenPort string) ([][]string, error) {
 	reqCount := len(l())
 	allPorts := [][]string{}
 
@@ -131,63 +127,73 @@ func main() {
 		log.Fatalf("Mkdir %s failed: %v", nonDeterministicField, err)
 	}
 
-	// get the service running in prod
-	baseProdService := ProdService{
-		configPath: v1Config,
-		dbPort:     databasePort,
-		listenPort: origListenPort,
-		bin:        v1Bin,
+	// create snapshot dir
+	err = os.RemoveAll(snapshotPath)
+	if err != nil {
+		log.Fatalf("Remove %s failed: %v", snapshotPath, err)
 	}
-	experimentalProdService := ProdService{
-		configPath: v2Config,
-		dbPort:     databasePort,
-		listenPort: origListenPort,
-		bin:        v2Bin,
+	err = os.Mkdir(snapshotPath, 0700)
+	if err != nil {
+		log.Fatalf("Mkdir %s failed: %v", snapshotPath, err)
+	}
+
+	// get the service running in prod
+	baseProdService := service.ProdService{
+		ConfigPath: v1Config,
+		DbPort:     databasePort,
+		ListenPort: origListenPort,
+		Bin:        v1Bin,
+	}
+	experimentalProdService := service.ProdService{
+		ConfigPath: v2Config,
+		DbPort:     databasePort,
+		ListenPort: origListenPort,
+		Bin:        v2Bin,
 	}
 
 	runCnt := 0
 
 	// cloned prod database
-	clonedDb, err := cloneNeonDatabase("replica", "main", false)
+	clonedDb, err := service.CloneNeonDatabase("replica", "main", false)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
 	fmt.Printf("Cloned database %+v\n", clonedDb)
 
 	// generate traffic patterns
-	allPorts, err := requestsPorts(listOfReqs1, runs, baseListenPort, expListenPort)
+	allPorts, err := requestsPorts(service.ListOfReqs1, runs, baseListenPort, expListenPort)
 	if err != nil {
 		log.Fatalf("Failed to generate traffic patterns: %v", err)
 	}
 
 	// run baseline service
-	clonedDbB, err := cloneNeonDatabase("cloneB", clonedDb.branch, false)
+	clonedDbB, err := service.CloneNeonDatabase("cloneB", clonedDb.Branch, false)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
 	fmt.Printf("Cloned database is: %v\n", clonedDbB)
 
-	baselineService, err := Init(runCnt, []string{baseListenPort}, clonedDbB.port, []ProdService{baseProdService}, allPorts[runCnt])
+	baselineService, err := service.Init(runCnt, []string{baseListenPort}, clonedDbB.Port, []service.ProdService{baseProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
-	baselineService.run(listOfReqs1)
+	baselineService.Run(service.ListOfReqs1)
 
 	// run baseline service2
-	clonedDbB2, err := cloneNeonDatabase("cloneB2", clonedDb.branch, false)
+	clonedDbB2, err := service.CloneNeonDatabase("cloneB2", clonedDb.Branch, false)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
 	fmt.Printf("Cloned database is: %v\n", clonedDbB)
 
 	runCnt += 1
-	baselineService2, err := Init(runCnt, []string{baseListenPort}, clonedDbB2.port, []ProdService{baseProdService}, allPorts[runCnt])
+	baselineService2, err := service.Init(runCnt, []string{baseListenPort}, clonedDbB2.Port, []service.ProdService{baseProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
-	baselineService2.run(listOfReqs1)
+	baselineService2.Run(service.ListOfReqs1)
 
-	if err := getNonDeterministic(baselineService, baselineService2); err != nil {
+	if err := diff.GetNonDeterministic(baselineService, baselineService2); err != nil {
 		log.Fatalf("Get non deterministic error failed: %v", err)
 	}
 	if runs == 2 {
@@ -195,29 +201,29 @@ func main() {
 	}
 
 	// run experimental service
-	clonedDbE, err := cloneNeonDatabase("cloneE", clonedDb.branch, true)
+	clonedDbE, err := service.CloneNeonDatabase("cloneE", clonedDb.Branch, true)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
 	fmt.Printf("Cloned database is: %+v\n", clonedDbE)
 
 	runCnt += 1
-	experientalService, err := Init(runCnt, []string{expListenPort}, clonedDbE.port, []ProdService{experimentalProdService}, allPorts[runCnt])
+	experientalService, err := service.Init(runCnt, []string{expListenPort}, clonedDbE.Port, []service.ProdService{experimentalProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
-	experientalService.run(listOfReqs1)
+	experientalService.Run(service.ListOfReqs1)
 
-	eq1, err := outputEq(baselineService.outputPath, experientalService.outputPath, responseType)
+	eq1, err := diff.OutputEq(baselineService.OutputPath, experientalService.OutputPath, responseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, err := outputEq(baselineService.dumpDbPath, experientalService.dumpDbPath, databaseType)
+	eq2, err := diff.OutputEq(baselineService.DumpDbPath, experientalService.DumpDbPath, databaseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
 	if eq1 && eq2 {
-		color.Greenf("run %s and run %s is equal.\n", baselineService.runs, experientalService.runs)
+		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, experientalService.Runs)
 	}
 
 	if runs == 3 {
@@ -225,57 +231,58 @@ func main() {
 	}
 
 	// run requests on both baseline and experiental
-	clonedDbB1E1, err := cloneNeonDatabase("cloneB1E1", clonedDb.branch, true)
+	clonedDbB1E1, err := service.CloneNeonDatabase("cloneB1E1", clonedDb.Branch, true)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
 	fmt.Printf("Cloned database is: %+v\n", clonedDbB1E1)
 	runCnt += 1
-	b1E1Service, err := Init(runCnt, []string{baseListenPort, expListenPort}, clonedDbB1E1.port, []ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	b1E1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, clonedDbB1E1.Port, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
-	b1E1Service.run(listOfReqs1)
+	b1E1Service.Run(service.ListOfReqs1)
 
-	eq1, err = outputEq(baselineService.outputPath, b1E1Service.outputPath, responseType)
+	eq1, err = diff.OutputEq(baselineService.OutputPath, b1E1Service.OutputPath, responseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, err = outputEq(baselineService.dumpDbPath, b1E1Service.dumpDbPath, databaseType)
+
+	eq2, err = diff.OutputEq(baselineService.DumpDbPath, b1E1Service.DumpDbPath, databaseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
 	if eq1 && eq2 {
-		color.Greenf("run %s and run %s is equal.\n", baselineService.runs, b1E1Service.runs)
+		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, b1E1Service.Runs)
 	}
 	if runs == 4 {
 		return
 	}
 
 	// run requests on both experiental and baseline
-	clonedDbE1B1, err := cloneNeonDatabase("cloneE1B1", clonedDb.branch, true)
+	clonedDbE1B1, err := service.CloneNeonDatabase("cloneE1B1", clonedDb.Branch, true)
 	if err != nil {
 		log.Fatalf("Cloned database failed: %v", err)
 	}
 	fmt.Printf("Cloned database is: %+v\n", clonedDbE1B1)
 	runCnt += 1
 
-	e1B1Service, err := Init(runCnt, []string{baseListenPort, expListenPort}, clonedDbE1B1.port, []ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	e1B1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, clonedDbE1B1.Port, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
-	e1B1Service.run(listOfReqs1)
+	e1B1Service.Run(service.ListOfReqs1)
 
-	eq1, err = outputEq(baselineService.outputPath, e1B1Service.outputPath, responseType)
+	eq1, err = diff.OutputEq(baselineService.OutputPath, e1B1Service.OutputPath, responseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
-	eq2, err = outputEq(baselineService.dumpDbPath, e1B1Service.dumpDbPath, databaseType)
+	eq2, err = diff.OutputEq(baselineService.DumpDbPath, e1B1Service.DumpDbPath, databaseType)
 	if err != nil {
 		log.Fatalf("Failed to compare two outputs: %v", err)
 	}
 	if eq1 && eq2 {
-		color.Greenf("run %s and run %s is equal.\n", baselineService.runs, e1B1Service.runs)
+		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, e1B1Service.Runs)
 	}
 
 	if runs == 5 {

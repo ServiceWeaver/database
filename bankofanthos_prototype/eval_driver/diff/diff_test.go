@@ -1,4 +1,4 @@
-package main
+package diff
 
 import (
 	"bankofanthos_prototype/eval_driver/pb"
@@ -63,7 +63,7 @@ func TestGetDiffHelper(t *testing.T) {
 		},
 	}
 
-	diffInfos, err := getDiffHelper(diff, "database")
+	diffInfos, err := getDiffHelper(diff)
 	if err != nil {
 		t.Fatal(err)
 	}

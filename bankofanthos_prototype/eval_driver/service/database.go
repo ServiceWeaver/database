@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"bankofanthos_prototype/eval_driver/dbclone"
@@ -11,8 +11,8 @@ import (
 )
 
 type database struct {
-	branch string
-	port   string
+	Branch string
+	Port   string
 }
 
 func getDatabaseByBranchName(branchName string) (database, error) {
@@ -51,14 +51,14 @@ func getDatabaseByBranchName(branchName string) (database, error) {
 		return database, nil
 	}
 
-	database.port = strings.Split(address, ":")[1]
-	database.branch = branchName
+	database.Port = strings.Split(address, ":")[1]
+	database.Branch = branchName
 
 	return database, nil
 }
 
 // cloneDatabase clones a database from ancestorBranchName if it does not exist.
-func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool) (database, error) {
+func CloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool) (database, error) {
 	db := database{}
 
 	// running database fork command under neon directory
@@ -87,7 +87,7 @@ func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool
 	if err != nil {
 		return db, nil
 	}
-	if existingDb.branch == branchName && existingDb.port != "" {
+	if existingDb.Branch == branchName && existingDb.Port != "" {
 		return existingDb, nil
 	}
 
@@ -124,7 +124,7 @@ func cloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool
 			fmt.Printf("Error changing back to original directory: %v\n", err)
 			return db, err
 		}
-		err = switchRPlusRMinusCloning(db.port)
+		err = switchRPlusRMinusCloning(db.Port)
 		return db, err
 	}
 

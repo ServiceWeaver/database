@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"fmt"
@@ -15,39 +15,54 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
-type Service struct {
-	configPaths  []string
-	runs         string
-	dbPort       string
-	listenPorts  []string
-	outputPath   string
-	dumpDbPath   string
-	logPath      string
-	prodServices []ProdService
+var (
+	configPath   = "configs/"
+	logPath      = "logs/"
+	outPath      = "out/"
+	snapshotPath = "snapshot/"
+)
 
-	reqPorts []string
+// ProdService defines binary will be running in prod
+type ProdService struct {
+	ConfigPath string
+	DbPort     string
+	Bin        string
+	ListenPort string
+}
+
+type Service struct {
+	ConfigPaths  []string
+	Runs         string
+	DbPort       string
+	ListenPorts  []string
+	OutputPath   string
+	DumpDbPath   string
+	LogPath      string
+	ProdServices []ProdService
+
+	ReqPorts []string
 }
 
 func Init(curRun int, listenPorts []string, dbPort string, prodServices []ProdService, reqPorts []string) (Service, error) {
 	service := Service{
-		runs:         fmt.Sprintf("%d", curRun),
-		dbPort:       dbPort,
-		listenPorts:  listenPorts,
-		logPath:      fmt.Sprintf("%slog%d", logPath, curRun),
-		outputPath:   fmt.Sprintf("%sresp%d", outPath, curRun),
-		dumpDbPath:   fmt.Sprintf("%sdb%d.sql", outPath, curRun),
-		prodServices: prodServices,
+		Runs:         fmt.Sprintf("%d", curRun),
+		DbPort:       dbPort,
+		ListenPorts:  listenPorts,
+		LogPath:      fmt.Sprintf("%slog%d", logPath, curRun),
+		OutputPath:   fmt.Sprintf("%sresp%d", outPath, curRun),
+		DumpDbPath:   fmt.Sprintf("%sdb%d.sql", outPath, curRun),
+		ProdServices: prodServices,
 
-		reqPorts: reqPorts,
+		ReqPorts: reqPorts,
 	}
 
 	for i := 0; i < len(prodServices); i++ {
-		service.configPaths = append(service.configPaths, fmt.Sprintf("%sweaver%d-%d.toml", configPath, curRun, i))
+		service.ConfigPaths = append(service.ConfigPaths, fmt.Sprintf("%sweaver%d-%d.toml", configPath, curRun, i))
 	}
 
 	// generate config
 	for i := 0; i < len(prodServices); i++ {
-		err := service.generateConfig(service.configPaths[i], listenPorts[i], prodServices[i])
+		err := service.generateConfig(service.ConfigPaths[i], listenPorts[i], prodServices[i])
 		if err != nil {
 			return service, err
 		}
@@ -72,12 +87,12 @@ func (s Service) writeOutput(output, outPath string) error {
 }
 
 func (s Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
-	configByte, err := os.ReadFile(prodService.configPath)
+	configByte, err := os.ReadFile(prodService.ConfigPath)
 	if err != nil {
 		return err
 	}
-	configStr := strings.ReplaceAll(string(configByte), prodService.dbPort, s.dbPort)
-	configStr = strings.ReplaceAll(configStr, prodService.listenPort, listenPort)
+	configStr := strings.ReplaceAll(string(configByte), prodService.DbPort, s.DbPort)
+	configStr = strings.ReplaceAll(configStr, prodService.ListenPort, listenPort)
 
 	file, err := os.Create(configPath)
 	if err != nil {
@@ -95,7 +110,7 @@ func (s Service) generateConfig(configPath, listenPort string, prodService ProdS
 }
 
 func (s Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath, logPath string) {
-	fmt.Printf("Start running service %s, config file %s\n", s.runs, configPath)
+	fmt.Printf("Start running service %s, config file %s\n", s.Runs, configPath)
 
 	cmd := exec.Command(binPath)
 	cmd.Env = append(os.Environ(), "SERVICEWEAVER_CONFIG="+configPath)
@@ -137,7 +152,7 @@ func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
 			}
 			i++
 			if i >= runs {
-				fmt.Printf("Stopped service %s\n", s.runs)
+				fmt.Printf("Stopped service %s\n", s.Runs)
 				return
 			}
 		default:
@@ -147,23 +162,23 @@ func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	}
 }
 
-func (s Service) run(r listOfReqs) {
-	cmdCh := make(chan *exec.Cmd, len(s.prodServices))
-	upCh := make(chan bool, len(s.prodServices))
+func (s Service) Run(r ListOfReqs) {
+	cmdCh := make(chan *exec.Cmd, len(s.ProdServices))
+	upCh := make(chan bool, len(s.ProdServices))
 	var wg sync.WaitGroup
-	for i, prodService := range s.prodServices {
+	for i, prodService := range s.ProdServices {
 		wg.Add(1)
 		go func(bin string, configPath string, i int) {
-			s.start(cmdCh, upCh, bin, configPath, fmt.Sprintf(s.logPath+"-%d", i))
+			s.start(cmdCh, upCh, bin, configPath, fmt.Sprintf(s.LogPath+"-%d", i))
 			wg.Done()
-		}(prodService.bin, s.configPaths[i], i)
+		}(prodService.Bin, s.ConfigPaths[i], i)
 	}
 
 	s.sendRequests(upCh, r)
-	go s.stop(cmdCh, len(s.prodServices))
+	go s.stop(cmdCh, len(s.ProdServices))
 	wg.Wait()
 
-	err := dumpDb(s.dbPort, s.dumpDbPath)
+	err := dumpDb(s.DbPort, s.DumpDbPath)
 	if err != nil {
 		log.Fatalf("Failed to dump db: %v", err)
 	}
@@ -171,20 +186,20 @@ func (s Service) run(r listOfReqs) {
 	fmt.Println("Finished running service")
 }
 
-func (s Service) sendListOfReqs(client http.Client, rFunc listOfReqs, ports []string) error {
+func (s Service) sendListOfReqs(client http.Client, rFunc ListOfReqs, ports []string) error {
 	reqs := rFunc()
 	for i, r := range reqs {
 		output, err := req(client, ports[i], r)
 		if err != nil {
 			return err
 		}
-		s.writeOutput(output, s.outputPath)
+		s.writeOutput(output, s.OutputPath)
 	}
 
 	return nil
 }
 
-func (s Service) sendRequests(upCh chan bool, r listOfReqs) error {
+func (s Service) sendRequests(upCh chan bool, r ListOfReqs) error {
 	options := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}
@@ -199,9 +214,9 @@ func (s Service) sendRequests(upCh chan bool, r listOfReqs) error {
 		select {
 		case <-upCh:
 			i++
-			if i == len(s.configPaths) {
+			if i == len(s.ConfigPaths) {
 				fmt.Println("Start sending requests")
-				err = s.sendListOfReqs(client, r, s.reqPorts)
+				err = s.sendListOfReqs(client, r, s.ReqPorts)
 				if err != nil {
 					return err
 				}
