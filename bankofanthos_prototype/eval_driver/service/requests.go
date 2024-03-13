@@ -1,4 +1,4 @@
-package main
+package service
 
 import (
 	"fmt"
@@ -165,9 +165,9 @@ func sendReq(client http.Client, port string, send sendStruct) (string, error) {
 	return bodyString, nil
 }
 
-type listOfReqs func() []interface{}
+type ListOfReqs func() []interface{}
 
-func listOfReqs1() []interface{} {
+func ListOfReqs1() []interface{} {
 	args := []interface{}{}
 	username := "test"
 	password := "1234"
