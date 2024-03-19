@@ -5,6 +5,7 @@ package dbclone
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -30,6 +31,7 @@ func newCloneDdl(ctx context.Context, Database *database) (*cloneDdl, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return database, nil
 }
 
@@ -48,20 +50,20 @@ func (c *cloneDdl) createClonedTables(ctx context.Context) error {
 func (c *cloneDdl) close(ctx context.Context) error {
 	// drop all tables, rename the snapshot back
 	for tablename, table := range c.clonedTables {
-		err := c.dropView(ctx, table.View.Name)
+		err := dropView(ctx, c.database.connPool, table.View.Name)
 		if err != nil {
 			return err
 		}
 
-		err = c.dropTable(ctx, table.Plus.Name)
+		err = dropTable(ctx, c.database.connPool, table.Plus.Name)
 		if err != nil {
 			return err
 		}
-		err = c.dropTable(ctx, table.Minus.Name)
+		err = dropTable(ctx, c.database.connPool, table.Minus.Name)
 		if err != nil {
 			return err
 		}
-		err = c.alterTableName(ctx, tablename, table.Snapshot)
+		err = alterTableName(ctx, c.database.connPool, tablename, table.Snapshot)
 		if err != nil {
 			return err
 		}
@@ -89,12 +91,12 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 
 	// at the end, rename original snapshot to tablesnapshot and view as the original snapshot name
 	originalName := snapshot.Name
-	err = c.alterTableName(ctx, snapshot.Name+"snapshot", snapshot)
+	err = alterTableName(ctx, c.database.connPool, snapshot.Name+"snapshot", snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to alter table names: %w", err)
 	}
 
-	err = c.alterViewName(ctx, originalName, view)
+	err = alterViewName(ctx, c.database.connPool, originalName, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to alter view names: %w", err)
 	}
@@ -108,44 +110,6 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 
 	c.clonedTables[originalName] = clonedTable
 	return clonedTable, nil
-}
-
-func (c *cloneDdl) alterTableName(ctx context.Context, newName string, table *table) error {
-	query := fmt.Sprintf("ALTER TABLE %s RENAME to %s;", table.Name, newName)
-	_, err := c.database.connPool.Exec(ctx, query)
-	if err != nil {
-		return err
-	}
-	table.Name = newName
-
-	return nil
-}
-
-func (c *cloneDdl) alterViewName(ctx context.Context, newName string, view *view) error {
-	query := fmt.Sprintf("ALTER VIEW %s RENAME to %s;", view.Name, newName)
-
-	_, err := c.database.connPool.Exec(ctx, query)
-	if err != nil {
-		return err
-	}
-	view.Name = newName
-
-	return nil
-}
-
-func (c *cloneDdl) dropTable(ctx context.Context, name string) error {
-	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
-
-	_, err := c.database.connPool.Exec(ctx, query)
-
-	return err
-}
-
-func (c *cloneDdl) dropView(ctx context.Context, name string) error {
-	query := fmt.Sprintf("DROP VIEW IF EXISTS %s;", name)
-
-	_, err := c.database.connPool.Exec(ctx, query)
-	return err
 }
 
 // TODO: Pick name for views and plus, minus which does not exist in database
@@ -202,6 +166,7 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 		view.Cols[name] = col
 		colnames = append(colnames, name)
 	}
+	sort.Strings(colnames)
 
 	viewQuery := fmt.Sprintf(`
 	CREATE  VIEW %s AS
@@ -209,8 +174,9 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 	UNION ALL
 	SELECT %s FROM %s
 	EXCEPT ALL
-	SELECT %s FROM %s;
-	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), minus.Name)
+	SELECT %s FROM %s
+	ORDER BY %s;
+	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), minus.Name, strings.Join(colnames, ", "))
 
 	_, err = c.database.connPool.Exec(ctx, viewQuery)
 	if err != nil {
