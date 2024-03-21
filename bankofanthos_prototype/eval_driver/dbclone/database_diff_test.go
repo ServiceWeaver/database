@@ -106,7 +106,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			},
 		}
 
-		AminusBView, err := dbDiff.minus(ctx, tableA, tableB, "AMinusB")
+		AminusBView, err := dbDiff.minusTables(ctx, tableA, tableB, "AMinusB")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +129,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
-		BminusAsView, err := dbDiff.minus(ctx, tableB, tableA, "BMinusA")
+		BminusAsView, err := dbDiff.minusTables(ctx, tableB, tableA, "BMinusA")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			},
 		}
 
-		AintersectB, err := dbDiff.intersect(ctx, tableA, tableB, "AintersectB")
+		AintersectB, err := dbDiff.intersectTables(ctx, tableA, tableB, "AintersectB")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,7 +183,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		BintersectA, err := dbDiff.intersect(ctx, tableB, tableA, "BintersectA")
+		BintersectA, err := dbDiff.intersectTables(ctx, tableB, tableA, "BintersectA")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -383,27 +383,27 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		expectedRowDiffs := &Diff{
 			Left: []*Row{
 				{[]any{int32(2), "B"}}, // A+
-				{[]any{nil, nil}},      // B+
+				{nil, nil},             // B+
 				{[]any{int32(3), "C"}}, //A+B+
-				{[]any{nil, nil}},      // A-
+				{nil, nil},             // A-
 				{[]any{int32(1), "A"}}, //B-
-				{[]any{nil, nil}},      // A-B-
+				{nil, nil},             // A-B-
 			},
 			Middle: []*Row{
-				{[]any{nil, nil}},      // A+
-				{[]any{nil, nil}},      // B+
-				{[]any{nil, nil}},      //A+B+
+				{nil, nil},             // A+
+				{nil, nil},             // B+
+				{nil, nil},             //A+B+
 				{[]any{int32(4), "D"}}, // A-
 				{[]any{int32(1), "A"}}, //B-
 				{[]any{int32(0), "O"}}, // A-B-
 			},
 			Right: []*Row{
-				{[]any{nil, nil}},      // A+
+				{nil, nil},             // A+
 				{[]any{int32(1), "D"}}, // B+
 				{[]any{int32(3), "C"}}, //A+B+
 				{[]any{int32(4), "D"}}, // A-
-				{[]any{nil, nil}},      //B-
-				{[]any{nil, nil}},      // A-B-
+				{nil, nil},             //B-
+				{nil, nil},             // A-B-
 			},
 			ColNames: []string{"id", "name"},
 		}

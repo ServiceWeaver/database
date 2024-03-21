@@ -87,13 +87,13 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 
 func (d *dbDiff) trimClonedTable(ctx context.Context, clonedTable *clonedTable) (*view, *view, error) {
 	trimPlusName := clonedTable.Plus.Name + "trim"
-	trimPlus, err := d.minus(ctx, clonedTable.Plus, clonedTable.Minus, trimPlusName)
+	trimPlus, err := d.minusTables(ctx, clonedTable.Plus, clonedTable.Minus, trimPlusName)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	trimMinusName := clonedTable.Minus.Name + "trim"
-	trimMinus, err := d.minus(ctx, clonedTable.Minus, clonedTable.Plus, trimMinusName)
+	trimMinus, err := d.minusTables(ctx, clonedTable.Minus, clonedTable.Plus, trimMinusName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -101,105 +101,51 @@ func (d *dbDiff) trimClonedTable(ctx context.Context, clonedTable *clonedTable) 
 	return trimPlus, trimMinus, nil
 }
 
-func (d *dbDiff) operationHelper(A interface{}, B interface{}) (string, string, map[string]column, error) {
-	var colA, colB map[string]column
-	var nameA, nameB string
-	_, isViewA := A.(*view)
-	_, isViewB := B.(*view)
-	_, isTableA := A.(*table)
-	_, isTableB := B.(*table)
-	if isViewA && isViewB {
-		colA = A.(*view).Cols
-		colB = B.(*view).Cols
-		nameA = A.(*view).Name
-		nameB = B.(*view).Name
-	} else if isTableA && isTableB {
-		colA = A.(*table).Cols
-		colB = B.(*table).Cols
-		nameA = A.(*table).Name
-		nameB = B.(*table).Name
-	} else {
-		return "", "", nil, fmt.Errorf("unsupported struct")
-	}
-	if !reflect.DeepEqual(colA, colB) {
-		return "", "", nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", colA, colB)
+func (d *dbDiff) combine(ctx context.Context, name, a string, acolumns map[string]column, operation string, b string, bcolumns map[string]column) (*view, error) {
+	if !reflect.DeepEqual(acolumns, bcolumns) {
+		return nil, fmt.Errorf("relations %s and %s have different columns and cannot be combined", a, b)
 	}
 
-	return nameA, nameB, colA, nil
+	columnNames := maps.Keys(acolumns)
+	sort.Strings(columnNames)
+	joined := strings.Join(columnNames, ", ")
+	query := fmt.Sprintf(`                                                                                                                                                                           
+	CREATE VIEW %s AS (                                                                                                                                                                              
+		SELECT %s FROM %s                                                                                                                                                                        
+		%s                                                                                  
+		SELECT %s FROM %s                                                                                                                                                                        
+		ORDER BY %s                                                                                                                                                                              
+	);                                                                                                                                                                                               
+	`, name, joined, a, operation, joined, b, joined)
+	_, err := d.connPool.Exec(ctx, query)
+	return &view{Name: name, Cols: acolumns}, err
 }
 
-// A - B
-func (d *dbDiff) minus(ctx context.Context, A interface{}, B interface{}, viewName string) (*view, error) {
-	nameA, nameB, cols, err := d.operationHelper(A, B)
-	if err != nil {
-		return nil, err
-	}
-	colNames := maps.Keys(cols)
-	sort.Strings(colNames)
-
-	query := fmt.Sprintf(`
-	CREATE VIEW %s AS (
-	SELECT %s FROM %s
-	EXCEPT ALL
-	SELECT %s FROM %s
-	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
-
-	if _, err = d.connPool.Exec(ctx, query); err != nil {
-		return nil, err
-	}
-
-	return &view{Name: viewName, Cols: cols}, nil
+func (d *dbDiff) minusViews(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
+	return d.combine(ctx, viewName, viewA.Name, viewA.Cols, "EXCEPT ALL", viewB.Name, viewB.Cols)
 }
 
-// A intersect B
-func (d *dbDiff) intersect(ctx context.Context, A interface{}, B interface{}, viewName string) (*view, error) {
-	nameA, nameB, cols, err := d.operationHelper(A, B)
-	if err != nil {
-		return nil, err
-	}
-	colNames := maps.Keys(cols)
-	sort.Strings(colNames)
-
-	query := fmt.Sprintf(`
-	CREATE VIEW %s AS (
-	SELECT %s FROM %s
-	INTERSECT
-	SELECT %s FROM %s
-	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
-
-	if _, err = d.connPool.Exec(ctx, query); err != nil {
-		return nil, err
-	}
-	return &view{Name: viewName, Cols: cols}, nil
+func (d *dbDiff) intersectViews(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
+	return d.combine(ctx, viewName, viewA.Name, viewA.Cols, "INTERSECT ALL", viewB.Name, viewB.Cols)
 }
 
-// A union B
-func (d *dbDiff) union(ctx context.Context, A interface{}, B interface{}, viewName string) (*view, error) {
-	nameA, nameB, cols, err := d.operationHelper(A, B)
-	if err != nil {
-		return nil, err
-	}
-	colNames := maps.Keys(cols)
-	sort.Strings(colNames)
-
-	query := fmt.Sprintf(`
-	CREATE VIEW %s AS (
-	SELECT %s FROM %s
-	UNION ALL
-	SELECT %s FROM %s
-	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
-
-	if _, err := d.connPool.Exec(ctx, query); err != nil {
-		return nil, err
-	}
-
-	return &view{Name: viewName, Cols: cols}, nil
+func (d *dbDiff) unionViews(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
+	return d.combine(ctx, viewName, viewA.Name, viewA.Cols, "UNION ALL", viewB.Name, viewB.Cols)
 }
 
-// getUniqueCols returns primary key if there is any, if cannot find, it returns empty list.
+func (d *dbDiff) minusTables(ctx context.Context, tableA *table, tableB *table, tableName string) (*view, error) {
+	return d.combine(ctx, tableName, tableA.Name, tableA.Cols, "EXCEPT ALL", tableB.Name, tableB.Cols)
+}
+
+func (d *dbDiff) intersectTables(ctx context.Context, tableA *table, tableB *table, tableName string) (*view, error) {
+	return d.combine(ctx, tableName, tableA.Name, tableA.Cols, "INTERSECT ALL", tableB.Name, tableB.Cols)
+}
+
+func (d *dbDiff) unionTables(ctx context.Context, tableA *table, tableB *table, tableName string) (*view, error) {
+	return d.combine(ctx, tableName, tableA.Name, tableA.Cols, "UNION ALL", tableB.Name, tableB.Cols)
+}
+
+// getPrimaryKeyCols returns primary key if there is any, if cannot find, it returns empty list.
 func (d *dbDiff) getPrimaryKeyCols(table *table) []string {
 	for _, idx := range table.Indexes {
 		if idx.IsUnique && strings.Contains(idx.Name, "pkey") {
@@ -279,23 +225,33 @@ func (d *dbDiff) getRowsByPrimaryKey(ctx context.Context, primaryKeyView *view, 
 }
 
 func (d *dbDiff) fillRowSlices(val []any, length int) []*Row {
-	var slice []*Row
-	for range length {
-		slice = append(slice, (&Row{val}))
+	row := Row(val)
+	slice := make([]*Row, length)
+	for i := range slice {
+		slice[i] = &row
 	}
 	return slice
 }
 
-// There will be 6 sections for non primary key row diff, {A+, A+ B+, B+, A-, A-B-, B-}
-// Note: A+ means A+ - B+, A+B+ means A+ intersect B+; A- means A- - B-; A-B- means A- intersect B-
+// The diff of two versions, A and B, of a table can be divided into six
+// sections:
 //
-//	left			|		middle		|		right
-//	A+				| 		nil			|		nil
-//	A+B+			| 		nil			|		A+B+
-//	nil				| 		nil			|		B+
-//	B-				| 		B-			|		nil
-//	nil				| 		A-B-		|		nil
-//	nil				| 		A-			|		A-
+//  1. A+ - B+: the rows inserted into A but not into B.
+//  2. A+ & B+: the rows inserted into A and B.
+//  3. B+ - A+: the rows inserted into B but not into A.
+//  4. B- - A-: the rows deleted from B but not from A.
+//  5. A- & B-: the rows deleted from A and B.
+//  6. A- - B-: the rows deleted from A but not from B.
+//
+// Graphically, these six sections look like the following:
+//
+//	left    | middle     | right
+//	A+ - B+ | nil        | nil
+//	A+ & B+ | nil        | A+ & B+
+//	nil     | nil        | B+ - A+
+//	B- -A-  | B- - A-    | nil
+//	nil     | A- \cap B- | nil
+//	nil     | A- - B-    | A- - B-
 func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableA.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", clonedTableA.View.Cols, clonedTableA.View.Cols)
@@ -318,7 +274,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	views = append(views, bPlus, bMinus)
 
 	// A+ - B+
-	aPlusOnly, err := d.minus(ctx, aPlus, bPlus, "aPlusOnly")
+	aPlusOnly, err := d.minusViews(ctx, aPlus, bPlus, "aPlusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -328,17 +284,18 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, aPlusOnly)
 
-	var nilRows []any
+	// TODO: switch to a single nil value rather than a row of nils
+	var nilRow []any
 	for range colNames {
-		nilRows = append(nilRows, nil)
+		nilRow = append(nilRow, nil)
 	}
 
-	nilSlices := d.fillRowSlices(nilRows, len(aPlusRows))
+	nilSlices := d.fillRowSlices(nilRow, len(aPlusRows))
 	aPlusDiff := &Diff{Left: aPlusRows, Middle: nilSlices, Right: nilSlices, ColNames: colNames}
 	rowDiffs[APlusOnly] = aPlusDiff
 
 	// A+ intersect B+
-	aPlusBPlus, err := d.intersect(ctx, aPlus, bPlus, "aPlusBPlus")
+	aPlusBPlus, err := d.intersectViews(ctx, aPlus, bPlus, "aPlusBPlus")
 	if err != nil {
 		return nil, err
 	}
@@ -349,12 +306,12 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, aPlusBPlus)
 
-	nilSlices = d.fillRowSlices(nilRows, len(aPlusBPlusRows))
+	nilSlices = d.fillRowSlices(nilRow, len(aPlusBPlusRows))
 	aPlusBPlusRowsRowDiff := &Diff{Left: aPlusBPlusRows, Middle: nilSlices, Right: aPlusBPlusRows, ColNames: colNames}
 	rowDiffs[APlusBPlus] = aPlusBPlusRowsRowDiff
 
 	// B+ - A+
-	bPlusOnly, err := d.minus(ctx, bPlus, aPlus, "bPlusOnly")
+	bPlusOnly, err := d.minusViews(ctx, bPlus, aPlus, "bPlusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -365,12 +322,12 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, bPlusOnly)
 
-	nilSlices = d.fillRowSlices(nilRows, len(bPlusRows))
+	nilSlices = d.fillRowSlices(nilRow, len(bPlusRows))
 	bPlusDiff := &Diff{Left: nilSlices, Middle: nilSlices, Right: bPlusRows, ColNames: colNames}
 	rowDiffs[BPlusOnly] = bPlusDiff
 
 	// B- - A-
-	bMinusOnly, err := d.minus(ctx, bMinus, aMinus, "bMinusOnly")
+	bMinusOnly, err := d.minusViews(ctx, bMinus, aMinus, "bMinusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -380,12 +337,12 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, bMinusOnly)
 
-	nilSlices = d.fillRowSlices(nilRows, len(bMinusRows))
+	nilSlices = d.fillRowSlices(nilRow, len(bMinusRows))
 	bMinusDiff := &Diff{Left: bMinusRows, Middle: bMinusRows, Right: nilSlices, ColNames: colNames}
 	rowDiffs[BMinusOnly] = bMinusDiff
 
 	// B- intersect A-
-	aMinusBMinus, err := d.intersect(ctx, aMinus, bMinus, "aMinusBMinus")
+	aMinusBMinus, err := d.intersectViews(ctx, aMinus, bMinus, "aMinusBMinus")
 	if err != nil {
 		return nil, err
 	}
@@ -394,12 +351,12 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 		return nil, err
 	}
 	views = append(views, aMinusBMinus)
-	nilSlices = d.fillRowSlices(nilRows, len(aMinusbMinusRows))
+	nilSlices = d.fillRowSlices(nilRow, len(aMinusbMinusRows))
 	aMinusbMinusDiff := &Diff{Left: nilSlices, Middle: aMinusbMinusRows, Right: nilSlices, ColNames: colNames}
 	rowDiffs[AMinusBMinus] = aMinusbMinusDiff
 
 	// A- - B-
-	aMinusOnly, err := d.minus(ctx, aMinus, bMinus, "aMinusOnly")
+	aMinusOnly, err := d.minusViews(ctx, aMinus, bMinus, "aMinusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +365,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 		return nil, err
 	}
 	views = append(views, aMinusOnly)
-	nilSlices = d.fillRowSlices(nilRows, len(aMinusRows))
+	nilSlices = d.fillRowSlices(nilRow, len(aMinusRows))
 	aMinusDiff := &Diff{Left: nilSlices, Middle: aMinusRows, Right: aMinusRows, ColNames: colNames}
 	rowDiffs[AMinusOnly] = aMinusDiff
 
@@ -463,24 +420,24 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, primaryKeyView)
 
-	bMinusAMinus, err := d.minus(ctx, bMinus, aMinus, "BMinusAMinus")
+	bMinusAMinus, err := d.minusViews(ctx, bMinus, aMinus, "BMinusAMinus")
 	if err != nil {
 		return nil, err
 	}
 
-	aMinusBMinus, err := d.minus(ctx, aMinus, bMinus, "AMinusBMinus")
+	aMinusBMinus, err := d.minusViews(ctx, aMinus, bMinus, "AMinusBMinus")
 	if err != nil {
 		return nil, err
 	}
 
-	aMinusIntersectBMinus, err := d.intersect(ctx, aMinus, bMinus, "AMinusIntersectBMinus")
+	aMinusIntersectBMinus, err := d.intersectViews(ctx, aMinus, bMinus, "AMinusIntersectBMinus")
 	if err != nil {
 		return nil, err
 	}
 	views = append(views, bMinusAMinus, aMinusBMinus, aMinusIntersectBMinus)
 
 	// Left: A+, B- - A-
-	leftSideView, err := d.union(ctx, aPlus, bMinusAMinus, "leftView")
+	leftSideView, err := d.unionViews(ctx, aPlus, bMinusAMinus, "leftView")
 	if err != nil {
 		return nil, err
 	}
@@ -496,7 +453,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	views = append(views, leftSideView, leftSideDiff)
 
 	// Right: B+, A- - B-
-	rightSideView, err := d.union(ctx, bPlus, aMinusBMinus, "rightView")
+	rightSideView, err := d.unionViews(ctx, bPlus, aMinusBMinus, "rightView")
 	if err != nil {
 		return nil, err
 	}
@@ -511,11 +468,11 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	views = append(views, rightSideView, rightSideDiff)
 
 	// Middle: A- intersect B-, A- - B-, B- - A-
-	halfMiddleSideView, err := d.union(ctx, aMinusIntersectBMinus, aMinusBMinus, "halfMiddle")
+	halfMiddleSideView, err := d.unionViews(ctx, aMinusIntersectBMinus, aMinusBMinus, "halfMiddle")
 	if err != nil {
 		return nil, err
 	}
-	middleSideView, err := d.union(ctx, halfMiddleSideView, bMinusAMinus, "middleView")
+	middleSideView, err := d.unionViews(ctx, halfMiddleSideView, bMinusAMinus, "middleView")
 	if err != nil {
 		return nil, err
 	}
