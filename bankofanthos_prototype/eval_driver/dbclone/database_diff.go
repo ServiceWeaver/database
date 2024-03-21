@@ -8,21 +8,25 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"golang.org/x/exp/maps"
 )
 
-type Row []interface{}
+type Row []any
 
-type RowDiff struct {
+// Diff shows rows for 3 way diff. Left, Middle and Right are the same length
+// each corresponding position is one row for one way diff.
+// if the row is not exists, value will be nil.
+type Diff struct {
 	Left     []*Row // control
 	Middle   []*Row // baseline
 	Right    []*Row // experimental
 	ColNames []string
 }
 
-type DiffType int
+type diffType int
 
 const (
-	APlusOnly DiffType = iota + 1
+	APlusOnly diffType = iota + 1
 	BPlusOnly
 	APlusBPlus
 	AMinusOnly
@@ -31,7 +35,7 @@ const (
 	PrimaryKey
 )
 
-func (d DiffType) String() string {
+func (d diffType) String() string {
 	return [...]string{"APlusOnly", "BPlusOnly", "APlusBPlus", "AMinusOnly", "BMinusOnly", "AMinusBMinus", "PrimaryKey"}[d-1]
 }
 
@@ -52,6 +56,8 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 	for n := range view.Cols {
 		colNames = append(colNames, n)
 	}
+
+	// TODO: sort the columns for where they defined. Sort the primary keys by orders
 	sort.Strings(colNames)
 	query := fmt.Sprintf("SELECT %s FROM %s;", strings.Join(colNames, ", "), view.Name)
 
@@ -62,8 +68,8 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 	defer rows.Close()
 
 	for rows.Next() {
-		rowVal := make([]interface{}, len(colNames))
-		rowPtr := make([]interface{}, len(colNames))
+		rowVal := make([]any, len(colNames))
+		rowPtr := make([]any, len(colNames))
 		for i := range rowVal {
 			rowPtr[i] = &rowVal[i]
 		}
@@ -76,72 +82,18 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 		dumpRows = append(dumpRows, row)
 	}
 
-	return dumpRows, colNames, nil
-}
-
-// tableA - tableB
-func (d *dbDiff) minusTable(ctx context.Context, tableA *table, tableB *table, viewName string) (*view, error) {
-	var colNames []string
-	if !reflect.DeepEqual(tableA.Cols, tableB.Cols) {
-		return nil, fmt.Errorf("tableA %v and tableB %v have different columns, cannot minus", tableA.Cols, tableB.Cols)
-	}
-	for n := range tableA.Cols {
-		colNames = append(colNames, n)
-	}
-	sort.Strings(colNames)
-
-	query := fmt.Sprintf(`
-	CREATE VIEW %s AS (
-	SELECT %s FROM %s
-	EXCEPT ALL
-	SELECT %s FROM %s
-	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), tableA.Name, strings.Join(colNames, ", "), tableB.Name, strings.Join(colNames, ", "))
-
-	_, err := d.connPool.Exec(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-
-	return &view{Name: viewName, Cols: tableA.Cols}, nil
-}
-
-// tableA intersect tableB
-func (d *dbDiff) intersectTable(ctx context.Context, tableA *table, tableB *table, viewName string) (*view, error) {
-	var colNames []string
-	if !reflect.DeepEqual(tableA.Cols, tableB.Cols) {
-		return nil, fmt.Errorf("tableA %v and tableB %v have different columns, cannot intersect", tableA.Cols, tableB.Cols)
-	}
-	for n := range tableA.Cols {
-		colNames = append(colNames, n)
-	}
-	sort.Strings(colNames)
-
-	query := fmt.Sprintf(`
-	CREATE VIEW %s AS (
-	SELECT %s FROM %s
-	INTERSECT
-	SELECT %s FROM %s
-	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), tableA.Name, strings.Join(colNames, ", "), tableB.Name, strings.Join(colNames, ", "))
-
-	_, err := d.connPool.Exec(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-
-	return &view{Name: viewName, Cols: tableA.Cols}, nil
+	return dumpRows, colNames, rows.Err()
 }
 
 func (d *dbDiff) trimClonedTable(ctx context.Context, clonedTable *clonedTable) (*view, *view, error) {
 	trimPlusName := clonedTable.Plus.Name + "trim"
-	trimPlus, err := d.minusTable(ctx, clonedTable.Plus, clonedTable.Minus, trimPlusName)
+	trimPlus, err := d.minus(ctx, clonedTable.Plus, clonedTable.Minus, trimPlusName)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	trimMinusName := clonedTable.Minus.Name + "trim"
-	trimMinus, err := d.minusTable(ctx, clonedTable.Minus, clonedTable.Plus, trimMinusName)
+	trimMinus, err := d.minus(ctx, clonedTable.Minus, clonedTable.Plus, trimMinusName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -149,15 +101,40 @@ func (d *dbDiff) trimClonedTable(ctx context.Context, clonedTable *clonedTable) 
 	return trimPlus, trimMinus, nil
 }
 
-// viewA - viewB
-func (d *dbDiff) minusView(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
-	var colNames []string
-	if !reflect.DeepEqual(viewA.Cols, viewB.Cols) {
-		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot minus", viewB.Cols, viewB.Cols)
+func (d *dbDiff) operationHelper(A interface{}, B interface{}) (string, string, map[string]column, error) {
+	var colA, colB map[string]column
+	var nameA, nameB string
+	_, isViewA := A.(*view)
+	_, isViewB := B.(*view)
+	_, isTableA := A.(*table)
+	_, isTableB := B.(*table)
+	if isViewA && isViewB {
+		colA = A.(*view).Cols
+		colB = B.(*view).Cols
+		nameA = A.(*view).Name
+		nameB = B.(*view).Name
+	} else if isTableA && isTableB {
+		colA = A.(*table).Cols
+		colB = B.(*table).Cols
+		nameA = A.(*table).Name
+		nameB = B.(*table).Name
+	} else {
+		return "", "", nil, fmt.Errorf("unsupported struct")
 	}
-	for n := range viewA.Cols {
-		colNames = append(colNames, n)
+	if !reflect.DeepEqual(colA, colB) {
+		return "", "", nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", colA, colB)
 	}
+
+	return nameA, nameB, colA, nil
+}
+
+// A - B
+func (d *dbDiff) minus(ctx context.Context, A interface{}, B interface{}, viewName string) (*view, error) {
+	nameA, nameB, cols, err := d.operationHelper(A, B)
+	if err != nil {
+		return nil, err
+	}
+	colNames := maps.Keys(cols)
 	sort.Strings(colNames)
 
 	query := fmt.Sprintf(`
@@ -166,25 +143,23 @@ func (d *dbDiff) minusView(ctx context.Context, viewA *view, viewB *view, viewNa
 	EXCEPT ALL
 	SELECT %s FROM %s
 	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), viewA.Name, strings.Join(colNames, ", "), viewB.Name, strings.Join(colNames, ", "))
+	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
 
-	_, err := d.connPool.Exec(ctx, query)
+	_, err = d.connPool.Exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	return &view{Name: viewName, Cols: viewA.Cols}, nil
+	return &view{Name: viewName, Cols: cols}, nil
 }
 
-// viewA intersect viewB
-func (d *dbDiff) intersectView(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
-	var colNames []string
-	if !reflect.DeepEqual(viewA.Cols, viewB.Cols) {
-		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", viewA.Cols, viewB.Cols)
+// A intersect B
+func (d *dbDiff) intersect(ctx context.Context, A interface{}, B interface{}, viewName string) (*view, error) {
+	nameA, nameB, cols, err := d.operationHelper(A, B)
+	if err != nil {
+		return nil, err
 	}
-	for n := range viewA.Cols {
-		colNames = append(colNames, n)
-	}
+	colNames := maps.Keys(cols)
 	sort.Strings(colNames)
 
 	query := fmt.Sprintf(`
@@ -193,25 +168,23 @@ func (d *dbDiff) intersectView(ctx context.Context, viewA *view, viewB *view, vi
 	INTERSECT
 	SELECT %s FROM %s
 	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), viewA.Name, strings.Join(colNames, ", "), viewB.Name, strings.Join(colNames, ", "))
+	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
 
-	_, err := d.connPool.Exec(ctx, query)
+	_, err = d.connPool.Exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	return &view{Name: viewName, Cols: viewA.Cols}, nil
+	return &view{Name: viewName, Cols: cols}, nil
 }
 
-// viewA union viewB
-func (d *dbDiff) unionView(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
-	var colNames []string
-	if !reflect.DeepEqual(viewA.Cols, viewB.Cols) {
-		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot union", viewA.Cols, viewB.Cols)
+// A union B
+func (d *dbDiff) union(ctx context.Context, A interface{}, B interface{}, viewName string) (*view, error) {
+	nameA, nameB, cols, err := d.operationHelper(A, B)
+	if err != nil {
+		return nil, err
 	}
-	for n := range viewA.Cols {
-		colNames = append(colNames, n)
-	}
+	colNames := maps.Keys(cols)
 	sort.Strings(colNames)
 
 	query := fmt.Sprintf(`
@@ -220,28 +193,24 @@ func (d *dbDiff) unionView(ctx context.Context, viewA *view, viewB *view, viewNa
 	UNION ALL
 	SELECT %s FROM %s
 	ORDER BY %s);
-	`, viewName, strings.Join(colNames, ", "), viewA.Name, strings.Join(colNames, ", "), viewB.Name, strings.Join(colNames, ", "))
+	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
 
-	_, err := d.connPool.Exec(ctx, query)
-	if err != nil {
+	if _, err := d.connPool.Exec(ctx, query); err != nil {
 		return nil, err
 	}
 
-	return &view{Name: viewName, Cols: viewA.Cols}, nil
+	return &view{Name: viewName, Cols: cols}, nil
 }
 
-// getUniqueCols returns primary key if there is any, if cannot find, it returns unique columns. If there is no
-// unique columns, this function will return empty list.
-func (d *dbDiff) getPrimaryKeyCols(table *table) ([]string, error) {
-	var uniqueCols []string
+// getUniqueCols returns primary key if there is any, if cannot find, it returns empty list.
+func (d *dbDiff) getPrimaryKeyCols(table *table) []string {
 	for _, idx := range table.Indexes {
 		if idx.IsUnique && strings.Contains(idx.Name, "pkey") {
-			uniqueCols = idx.ColumnNames
-			break
+			return idx.ColumnNames
 		}
 	}
 
-	return uniqueCols, nil
+	return nil
 }
 
 func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view, aMinus *view, bMinus *view, clonedTableA *clonedTable, cloneTableB *clonedTable) (*view, error) {
@@ -256,10 +225,7 @@ func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view,
 
 	viewName := "AUnionB"
 
-	primaryCols, err := d.getPrimaryKeyCols(clonedTableA.Snapshot)
-	if err != nil {
-		return nil, err
-	}
+	primaryCols := d.getPrimaryKeyCols(clonedTableA.Snapshot)
 
 	query := fmt.Sprintf(`
 	CREATE VIEW %s AS (
@@ -276,18 +242,18 @@ func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view,
 	ORDER BY %s);
 	`, viewName, strings.Join(primaryCols, ","), strings.Join(primaryCols, ","), aPlus.Name, strings.Join(primaryCols, ","), aMinus.Name, strings.Join(primaryCols, ","), bPlus.Name, strings.Join(primaryCols, ","), bMinus.Name, strings.Join(primaryCols, ","))
 
-	_, err = d.connPool.Exec(ctx, query)
+	_, err := d.connPool.Exec(ctx, query)
 	if err != nil {
 		return nil, err
 	}
-	cols := make(map[string]column)
+	cols := map[string]column{}
 	for _, colName := range primaryCols {
 		cols[colName] = clonedTableA.View.Cols[colName]
 	}
 	return &view{Name: viewName, Cols: cols}, nil
 }
 
-func (d *dbDiff) getOnePrimaryRow(ctx context.Context, primaryKeyView *view, sideView *view, viewName string) (*view, error) {
+func (d *dbDiff) getRowsByPrimaryKey(ctx context.Context, primaryKeyView *view, sideView *view, viewName string) (*view, error) {
 	var viewColQuery, primaryKeyColNames, primarySideColNames []string
 	for n := range primaryKeyView.Cols {
 		primaryKeyColNames = append(primaryKeyColNames, primaryKeyView.Name+"."+n)
@@ -308,33 +274,44 @@ func (d *dbDiff) getOnePrimaryRow(ctx context.Context, primaryKeyView *view, sid
 		ORDER BY %s);
 	`, viewName, strings.Join(viewColQuery, ","), primaryKeyView.Name, sideView.Name, strings.Join(primaryKeyColNames, ","), strings.Join(primarySideColNames, ","), strings.Join(primaryKeyColNames, ","))
 
-	_, err := d.connPool.Exec(ctx, query)
-	if err != nil {
+	if _, err := d.connPool.Exec(ctx, query); err != nil {
 		return nil, err
 	}
 
 	return &view{Name: viewName, Cols: sideView.Cols}, nil
 }
 
-func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (map[DiffType]*RowDiff, error) {
+func (d *dbDiff) fillRowSlices(val []any, length int) []*Row {
+	var slice []*Row
+	for range length {
+		slice = append(slice, (&Row{val}))
+	}
+	return slice
+}
+
+func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableA.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", clonedTableA.View.Cols, clonedTableA.View.Cols)
 	}
-	rowDiffs := make(map[DiffType]*RowDiff)
+	rowDiffs := map[diffType]*Diff{}
+
+	var views []*view
 	// trim cloned table A
 	aPlus, aMinus, err := d.trimClonedTable(ctx, clonedTableA)
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, aPlus, aMinus)
 
 	// trim cloned table B
 	bPlus, bMinus, err := d.trimClonedTable(ctx, clonedTableB)
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, bPlus, bMinus)
 
 	// A+ - B+
-	aPlusOnly, err := d.minusView(ctx, aPlus, bPlus, "aPlusOnly")
+	aPlusOnly, err := d.minus(ctx, aPlus, bPlus, "aPlusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -342,16 +319,19 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	if err != nil {
 		return nil, err
 	}
-	err = dropView(ctx, d.connPool, aPlusOnly.Name)
-	if err != nil {
-		return nil, err
+	views = append(views, aPlusOnly)
+
+	var nilRows []any
+	for range colNames {
+		nilRows = append(nilRows, nil)
 	}
 
-	aPlusDiff := &RowDiff{Left: aPlusRows, Middle: nil, Right: nil, ColNames: colNames}
+	nilSlices := d.fillRowSlices(nilRows, len(aPlusRows))
+	aPlusDiff := &Diff{Left: aPlusRows, Middle: nilSlices, Right: nilSlices, ColNames: colNames}
 	rowDiffs[APlusOnly] = aPlusDiff
 
 	// A+ intersect B+
-	aPlusBPlus, err := d.intersectView(ctx, aPlus, bPlus, "aPlusBPlus")
+	aPlusBPlus, err := d.intersect(ctx, aPlus, bPlus, "aPlusBPlus")
 	if err != nil {
 		return nil, err
 	}
@@ -360,16 +340,14 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	if err != nil {
 		return nil, err
 	}
-	err = dropView(ctx, d.connPool, aPlusBPlus.Name)
-	if err != nil {
-		return nil, err
-	}
+	views = append(views, aPlusBPlus)
 
-	aPlusBPlusRowsRowDiff := &RowDiff{Left: aPlusBPlusRows, Middle: nil, Right: aPlusBPlusRows, ColNames: colNames}
+	nilSlices = d.fillRowSlices(nilRows, len(aPlusBPlusRows))
+	aPlusBPlusRowsRowDiff := &Diff{Left: aPlusBPlusRows, Middle: nilSlices, Right: aPlusBPlusRows, ColNames: colNames}
 	rowDiffs[APlusBPlus] = aPlusBPlusRowsRowDiff
 
 	// B+ - A+
-	bPlusOnly, err := d.minusView(ctx, bPlus, aPlus, "bPlusOnly")
+	bPlusOnly, err := d.minus(ctx, bPlus, aPlus, "bPlusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -378,16 +356,14 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	if err != nil {
 		return nil, err
 	}
-	err = dropView(ctx, d.connPool, bPlusOnly.Name)
-	if err != nil {
-		return nil, err
-	}
+	views = append(views, bPlusOnly)
 
-	bPlusDiff := &RowDiff{Left: nil, Middle: nil, Right: bPlusRows, ColNames: colNames}
+	nilSlices = d.fillRowSlices(nilRows, len(bPlusRows))
+	bPlusDiff := &Diff{Left: nilSlices, Middle: nilSlices, Right: bPlusRows, ColNames: colNames}
 	rowDiffs[BPlusOnly] = bPlusDiff
 
 	// B- - A-
-	bMinusOnly, err := d.minusView(ctx, bMinus, aMinus, "bMinusOnly")
+	bMinusOnly, err := d.minus(ctx, bMinus, aMinus, "bMinusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -395,15 +371,14 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	if err != nil {
 		return nil, err
 	}
-	err = dropView(ctx, d.connPool, bMinusOnly.Name)
-	if err != nil {
-		return nil, err
-	}
-	bMinusDiff := &RowDiff{Left: bMinusRows, Middle: nil, Right: nil, ColNames: colNames}
+	views = append(views, bMinusOnly)
+
+	nilSlices = d.fillRowSlices(nilRows, len(bMinusRows))
+	bMinusDiff := &Diff{Left: bMinusRows, Middle: bMinusRows, Right: nilSlices, ColNames: colNames}
 	rowDiffs[BMinusOnly] = bMinusDiff
 
 	// B- intersect A-
-	aMinusBMinus, err := d.intersectView(ctx, aMinus, bMinus, "aMinusBMinus")
+	aMinusBMinus, err := d.intersect(ctx, aMinus, bMinus, "aMinusBMinus")
 	if err != nil {
 		return nil, err
 	}
@@ -411,15 +386,13 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	if err != nil {
 		return nil, err
 	}
-	err = dropView(ctx, d.connPool, aMinusBMinus.Name)
-	if err != nil {
-		return nil, err
-	}
-	aMinusbMinusDiff := &RowDiff{Left: aMinusbMinusRows, Middle: nil, Right: aMinusbMinusRows, ColNames: colNames}
+	views = append(views, aMinusBMinus)
+	nilSlices = d.fillRowSlices(nilRows, len(aMinusbMinusRows))
+	aMinusbMinusDiff := &Diff{Left: nilSlices, Middle: aMinusbMinusRows, Right: nilSlices, ColNames: colNames}
 	rowDiffs[AMinusBMinus] = aMinusbMinusDiff
 
 	// A- - B-
-	aMinusOnly, err := d.minusView(ctx, aMinus, bMinus, "aMinusOnly")
+	aMinusOnly, err := d.minus(ctx, aMinus, bMinus, "aMinusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -427,79 +400,81 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	if err != nil {
 		return nil, err
 	}
-	err = dropView(ctx, d.connPool, aMinusOnly.Name)
-	if err != nil {
-		return nil, err
-	}
-	aMinusDiff := &RowDiff{Left: nil, Middle: nil, Right: aMinusRows, ColNames: colNames}
+	views = append(views, aMinusOnly)
+	nilSlices = d.fillRowSlices(nilRows, len(aMinusRows))
+	aMinusDiff := &Diff{Left: nilSlices, Middle: aMinusRows, Right: aMinusRows, ColNames: colNames}
 	rowDiffs[AMinusOnly] = aMinusDiff
 
-	if err = dropView(ctx, d.connPool, aPlus.Name); err != nil {
-		return nil, err
+	// drop all views in reverse order because of dependency
+	for i := len(views) - 1; i >= 0; i-- {
+		if err = dropView(ctx, d.connPool, views[i].Name); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = dropView(ctx, d.connPool, aMinus.Name); err != nil {
-		return nil, err
+	diff := &Diff{ColNames: colNames}
+	diffTypes := []diffType{APlusOnly, BPlusOnly, APlusBPlus, AMinusOnly, BMinusOnly, AMinusBMinus}
+	for _, d := range diffTypes {
+		diff.Left = append(diff.Left, rowDiffs[d].Left...)
+		diff.Middle = append(diff.Middle, rowDiffs[d].Middle...)
+		diff.Right = append(diff.Right, rowDiffs[d].Right...)
 	}
 
-	if err = dropView(ctx, d.connPool, bPlus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, bMinus.Name); err != nil {
-		return nil, err
-	}
-
-	return rowDiffs, nil
+	return diff, nil
 }
 
 // left: A+, B- - A-
 // middle: A- intersect B-, A- - B-, B- - A-
 // right: B+, A- - B-
-func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (map[DiffType]*RowDiff, error) {
-	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableA.View.Cols) {
-		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", clonedTableA.View.Cols, clonedTableA.View.Cols)
+func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
+	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableB.View.Cols) {
+		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot diff", clonedTableA.View.Cols, clonedTableA.View.Cols)
 	}
-	rowDiffs := make(map[DiffType]*RowDiff)
+	var views []*view
 
 	// trim cloned table A
 	aPlus, aMinus, err := d.trimClonedTable(ctx, clonedTableA)
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, aPlus, aMinus)
 
 	// trim cloned table B
 	bPlus, bMinus, err := d.trimClonedTable(ctx, clonedTableB)
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, bPlus, bMinus)
 
 	primaryKeyView, err := d.getPrimarKeyRows(ctx, aPlus, bPlus, aMinus, bMinus, clonedTableA, clonedTableB)
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, primaryKeyView)
 
-	bMinusAMinus, err := d.minusView(ctx, bMinus, aMinus, "BMinusAMinus")
+	bMinusAMinus, err := d.minus(ctx, bMinus, aMinus, "BMinusAMinus")
 	if err != nil {
 		return nil, err
 	}
 
-	aMinusBMinus, err := d.minusView(ctx, aMinus, bMinus, "AMinusBMinus")
+	aMinusBMinus, err := d.minus(ctx, aMinus, bMinus, "AMinusBMinus")
 	if err != nil {
 		return nil, err
 	}
 
-	aMinusIntersectBMinus, err := d.intersectView(ctx, aMinus, bMinus, "AMinusIntersectBMinus")
+	aMinusIntersectBMinus, err := d.intersect(ctx, aMinus, bMinus, "AMinusIntersectBMinus")
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, bMinusAMinus, aMinusBMinus, aMinusIntersectBMinus)
 
 	// Left: A+, B- - A-
-	leftSideView, err := d.unionView(ctx, aPlus, bMinusAMinus, "leftView")
+	leftSideView, err := d.union(ctx, aPlus, bMinusAMinus, "leftView")
 	if err != nil {
 		return nil, err
 	}
-	leftSideDiff, err := d.getOnePrimaryRow(ctx, primaryKeyView, leftSideView, "leftDiff")
+
+	leftSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, leftSideView, "leftDiff")
 	if err != nil {
 		return nil, err
 	}
@@ -507,19 +482,14 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	if err != nil {
 		return nil, err
 	}
-	if err = dropView(ctx, d.connPool, leftSideDiff.Name); err != nil {
-		return nil, err
-	}
-	if err = dropView(ctx, d.connPool, leftSideView.Name); err != nil {
-		return nil, err
-	}
+	views = append(views, leftSideView, leftSideDiff)
 
 	// Right: B+, A- - B-
-	rightSideView, err := d.unionView(ctx, bPlus, aMinusBMinus, "rightView")
+	rightSideView, err := d.union(ctx, bPlus, aMinusBMinus, "rightView")
 	if err != nil {
 		return nil, err
 	}
-	rightSideDiff, err := d.getOnePrimaryRow(ctx, primaryKeyView, rightSideView, "rightDiff")
+	rightSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, rightSideView, "rightDiff")
 	if err != nil {
 		return nil, err
 	}
@@ -527,23 +497,18 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	if err != nil {
 		return nil, err
 	}
-	if err = dropView(ctx, d.connPool, rightSideDiff.Name); err != nil {
-		return nil, err
-	}
-	if err = dropView(ctx, d.connPool, rightSideView.Name); err != nil {
-		return nil, err
-	}
+	views = append(views, rightSideView, rightSideDiff)
 
 	// Middle: A- intersect B-, A- - B-, B- - A-
-	halfMiddleSideView, err := d.unionView(ctx, aMinusIntersectBMinus, aMinusBMinus, "halfMiddle")
+	halfMiddleSideView, err := d.union(ctx, aMinusIntersectBMinus, aMinusBMinus, "halfMiddle")
 	if err != nil {
 		return nil, err
 	}
-	middleSideView, err := d.unionView(ctx, halfMiddleSideView, bMinusAMinus, "middleView")
+	middleSideView, err := d.union(ctx, halfMiddleSideView, bMinusAMinus, "middleView")
 	if err != nil {
 		return nil, err
 	}
-	middleSideDiff, err := d.getOnePrimaryRow(ctx, primaryKeyView, middleSideView, "middleDiff")
+	middleSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, middleSideView, "middleDiff")
 	if err != nil {
 		return nil, err
 	}
@@ -551,65 +516,27 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	if err != nil {
 		return nil, err
 	}
+	views = append(views, halfMiddleSideView, middleSideView, middleSideDiff)
 
-	if err = dropView(ctx, d.connPool, middleSideDiff.Name); err != nil {
-		return nil, err
-	}
-	if err = dropView(ctx, d.connPool, middleSideView.Name); err != nil {
-		return nil, err
-	}
-	if err = dropView(ctx, d.connPool, halfMiddleSideView.Name); err != nil {
-		return nil, err
-	}
+	rowDiff := &Diff{Left: leftSideRows, Right: rightSideRows, Middle: middleSideRows, ColNames: colNames}
 
-	rowDiff := &RowDiff{Left: leftSideRows, Right: rightSideRows, Middle: middleSideRows, ColNames: colNames}
-	rowDiffs[PrimaryKey] = rowDiff
-
-	// drop all views
-	if err = dropView(ctx, d.connPool, primaryKeyView.Name); err != nil {
-		return nil, err
+	// drop all views in reverse order because of dependency
+	for i := len(views) - 1; i >= 0; i-- {
+		if err = dropView(ctx, d.connPool, views[i].Name); err != nil {
+			return nil, err
+		}
 	}
 
-	if err = dropView(ctx, d.connPool, aMinusBMinus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, bMinusAMinus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, aMinusIntersectBMinus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, aPlus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, aMinus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, bPlus.Name); err != nil {
-		return nil, err
-	}
-
-	if err = dropView(ctx, d.connPool, bMinus.Name); err != nil {
-		return nil, err
-	}
-
-	return rowDiffs, nil
+	return rowDiff, nil
 }
 
-func (d *dbDiff) getClonedTableRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (map[DiffType]*RowDiff, error) {
+func (d *dbDiff) getClonedTableRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableB.View.Cols) {
 		return nil, fmt.Errorf("cannot get row diff for different cols, tableA %v, tableB %v ", clonedTableA.View.Cols, clonedTableB.View.Cols)
 	}
 
-	pkCols, err := d.getPrimaryKeyCols(clonedTableA.Snapshot)
-	if err != nil {
-		return nil, err
-	}
+	pkCols := d.getPrimaryKeyCols(clonedTableA.Snapshot)
+
 	if len(pkCols) == 0 {
 		return d.getNonPrimaryKeyRowDiff(ctx, clonedTableA, clonedTableB)
 	}

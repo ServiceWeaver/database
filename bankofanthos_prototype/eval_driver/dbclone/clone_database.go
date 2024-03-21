@@ -47,7 +47,7 @@ func (d *ClonedDb) Close() {
 	d.connPool.Close()
 }
 
-func GetRowDiff(ctx context.Context, A *ClonedDb, B *ClonedDb) (map[string]map[DiffType]*RowDiff, error) {
+func ComputeDiff(ctx context.Context, A *ClonedDb, B *ClonedDb) (map[string]*Diff, error) {
 	// For each two clonedDb, compare each table and get rowDiffs for each table
 	return nil, nil
 }

@@ -106,7 +106,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			},
 		}
 
-		AminusBView, err := dbDiff.minusTable(ctx, tableA, tableB, "AMinusB")
+		AminusBView, err := dbDiff.minus(ctx, tableA, tableB, "AMinusB")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +129,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
-		BminusAsView, err := dbDiff.minusTable(ctx, tableB, tableA, "BMinusA")
+		BminusAsView, err := dbDiff.minus(ctx, tableB, tableA, "BMinusA")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			},
 		}
 
-		AintersectB, err := dbDiff.intersectTable(ctx, tableA, tableB, "AintersectB")
+		AintersectB, err := dbDiff.intersect(ctx, tableA, tableB, "AintersectB")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -183,7 +183,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		BintersectA, err := dbDiff.intersectTable(ctx, tableB, tableA, "BintersectA")
+		BintersectA, err := dbDiff.intersect(ctx, tableB, tableA, "BintersectA")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,20 +223,15 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 	})
 
 	t.Run("getPrimaryKeyCols", func(t *testing.T) {
-		usersCols, err := dbDiff.getPrimaryKeyCols(cloneDdl.database.Tables["users"])
-		if err != nil {
-			t.Fatal(err)
-		}
+		usersCols := dbDiff.getPrimaryKeyCols(cloneDdl.database.Tables["users"])
 
 		usersExpectedCols := []string{"accountid"}
 		if diff := cmp.Diff(usersExpectedCols, usersCols); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
-		contactsCols, err := dbDiff.getPrimaryKeyCols(cloneDdl.database.Tables["contacts"])
-		if err != nil {
-			t.Fatal(err)
-		}
+		contactsCols := dbDiff.getPrimaryKeyCols(cloneDdl.database.Tables["contacts"])
+
 		if got, want := len(contactsCols), 0; got != want {
 			t.Errorf("(-want,+got):\n(%d,%d)", want, got)
 		}
@@ -332,10 +327,12 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		INSERT INTO a(id, name) VALUES(0,'O');
 		INSERT INTO a(id, name) VALUES(1,'A');
 		INSERT INTO a(id, name) VALUES(2,'B');
+		INSERT INTO a(id, name) VALUES(4,'D');
 
 		INSERT INTO b(id, name) VALUES(0,'O');
 		INSERT INTO b(id, name) VALUES(1,'A');
 		INSERT INTO b(id, name) VALUES(2,'B');
+		INSERT INTO b(id, name) VALUES(4,'D');
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -365,7 +362,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		INSERT INTO A(id, name) VALUES(3,'C');
 		INSERT INTO A(id, name) VALUES(2,'B');
 		DELETE FROM A WHERE (id, name) = (0,'O');
-		
+		DELETE FROM A WHERE (id, name) = (4,'D');
 		DELETE FROM A WHERE (id, name) = (1,'A');
 		INSERT INTO a(id, name) VALUES(1,'A');
 		INSERT INTO B(id, name) VALUES(3,'C');
@@ -382,44 +379,33 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		expectedRowDiffs := map[DiffType]*RowDiff{
-			APlusOnly: {
-				Left:     []*Row{{[]any{int32(2), "B"}}},
-				Middle:   nil,
-				Right:    nil,
-				ColNames: []string{"id", "name"},
+		// order is {APlusOnly, BPlusOnly, APlusBPlus, AMinusOnly, BMinusOnly, AMinusBMinus}
+		expectedRowDiffs := &Diff{
+			Left: []*Row{
+				{[]any{int32(2), "B"}}, // A+
+				{[]any{nil, nil}},      // B+
+				{[]any{int32(3), "C"}}, //A+B+
+				{[]any{nil, nil}},      // A-
+				{[]any{int32(1), "A"}}, //B-
+				{[]any{nil, nil}},      // A-B-
 			},
-			BPlusOnly: {
-				Left:     nil,
-				Middle:   nil,
-				Right:    []*Row{{[]any{int32(1), "D"}}},
-				ColNames: []string{"id", "name"},
+			Middle: []*Row{
+				{[]any{nil, nil}},      // A+
+				{[]any{nil, nil}},      // B+
+				{[]any{nil, nil}},      //A+B+
+				{[]any{int32(4), "D"}}, // A-
+				{[]any{int32(1), "A"}}, //B-
+				{[]any{int32(0), "O"}}, // A-B-
 			},
-			APlusBPlus: {
-				Left:     []*Row{{[]any{int32(3), "C"}}},
-				Middle:   nil,
-				Right:    []*Row{{[]any{int32(3), "C"}}},
-				ColNames: []string{"id", "name"},
+			Right: []*Row{
+				{[]any{nil, nil}},      // A+
+				{[]any{int32(1), "D"}}, // B+
+				{[]any{int32(3), "C"}}, //A+B+
+				{[]any{int32(4), "D"}}, // A-
+				{[]any{nil, nil}},      //B-
+				{[]any{nil, nil}},      // A-B-
 			},
-			AMinusOnly: {
-				Left:     nil,
-				Middle:   nil,
-				Right:    nil,
-				ColNames: []string{"id", "name"},
-			},
-			BMinusOnly: {
-				Left:     []*Row{{[]any{int32(1), "A"}}},
-				Middle:   nil,
-				Right:    nil,
-				ColNames: []string{"id", "name"},
-			},
-			AMinusBMinus: {
-				Left:     []*Row{{[]any{int32(0), "O"}}},
-				Middle:   nil,
-				Right:    []*Row{{[]any{int32(0), "O"}}},
-				ColNames: []string{"id", "name"},
-			},
+			ColNames: []string{"id", "name"},
 		}
 		if diff := cmp.Diff(expectedRowDiffs, rowDiffs); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
@@ -450,10 +436,20 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		INSERT INTO a(id, name) VALUES(0,'O');
 		INSERT INTO a(id, name) VALUES(1,'A');
 		INSERT INTO a(id, name) VALUES(2,'B');
+		INSERT INTO a(id, name) VALUES(3,'C');
+		INSERT INTO a(id, name) VALUES(4,'D');
+		INSERT INTO a(id, name) VALUES(5,'E');
+		INSERT INTO a(id, name) VALUES(6,'F');
+		INSERT INTO a(id, name) VALUES(7,'G');
 
 		INSERT INTO b(id, name) VALUES(0,'O');
 		INSERT INTO b(id, name) VALUES(1,'A');
 		INSERT INTO b(id, name) VALUES(2,'B');
+		INSERT INTO b(id, name) VALUES(3,'C');
+		INSERT INTO b(id, name) VALUES(4,'D');
+		INSERT INTO b(id, name) VALUES(5,'E');
+		INSERT INTO b(id, name) VALUES(6,'F');
+		INSERT INTO b(id, name) VALUES(7,'G');
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -480,15 +476,22 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 
 		_, err = connPool.Exec(ctx,
 			`
-		INSERT INTO A(id, name) VALUES(3,'C');
-		DELETE FROM A WHERE (id, name) = (0,'O');
-		
-		DELETE FROM A WHERE (id, name) = (1,'A');
-		INSERT INTO A(id, name) VALUES(1,'A');
-
-		INSERT INTO B(id, name) VALUES(3,'C');
-		UPDATE B SET (id, name) = (1,'D') where (id, name) = (1,'A');
 		DELETE FROM B WHERE (id, name) = (0,'O');
+		UPDATE B SET (id, name) = (1,'AA') where (id, name) = (1, 'A');
+		DELETE FROM A WHERE (id, name) = (2,'B');
+		UPDATE A SET (id, name) = (3,'CC') where (id, name) = (3, 'C');
+		DELETE FROM A WHERE (id, name) = (4,'D');
+		DELETE FROM B WHERE (id, name) = (4,'D');
+		DELETE FROM A WHERE (id, name) = (5,'E');
+		UPDATE B SET (id, name) = (5,'EE') where (id, name) = (5, 'E');
+		DELETE FROM B WHERE (id, name) = (6,'F');
+		UPDATE A SET (id, name) = (6,'FF') where (id, name) = (6, 'F');
+		UPDATE A SET (id, name) = (7,'GG') where (id, name) = (7, 'G');
+		UPDATE B SET (id, name) = (7,'GGG') where (id, name) = (7, 'G');
+		INSERT INTO B(id, name) VALUES(8, 'H');
+		INSERT INTO A(id, name) VALUES(9, 'I');
+		INSERT INTO A(id, name) VALUES(10, 'J');
+		INSERT INTO B(id, name) VALUES(10, 'J');
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -500,13 +503,47 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expectedRowDiffs := map[DiffType]*RowDiff{
-			PrimaryKey: {
-				Left:     []*Row{{[]any{nil, nil}}, {[]any{int32(1), "A"}}, {[]any{int32(3), "C"}}},
-				Middle:   []*Row{{[]any{int32(0), "O"}}, {[]any{int32(1), "A"}}, {[]any{nil, nil}}},
-				Right:    []*Row{{[]any{nil, nil}}, {[]any{int32(1), "D"}}, {[]any{int32(3), "C"}}},
-				ColNames: []string{"id", "name"},
+		expectedRowDiffs := &Diff{
+			Left: []*Row{
+				{[]any{int32(0), "O"}},
+				{[]any{int32(1), "A"}},
+				{[]any{nil, nil}},
+				{[]any{int32(3), "CC"}},
+				{[]any{nil, nil}},
+				{[]any{nil, nil}},
+				{[]any{int32(6), "FF"}},
+				{[]any{int32(7), "GG"}},
+				{[]any{nil, nil}},
+				{[]any{int32(9), "I"}},
+				{[]any{int32(10), "J"}},
 			},
+			Middle: []*Row{
+				{[]any{int32(0), "O"}},
+				{[]any{int32(1), "A"}},
+				{[]any{int32(2), "B"}},
+				{[]any{int32(3), "C"}},
+				{[]any{int32(4), "D"}},
+				{[]any{int32(5), "E"}},
+				{[]any{int32(6), "F"}},
+				{[]any{int32(7), "G"}},
+				{[]any{nil, nil}},
+				{[]any{nil, nil}},
+				{[]any{nil, nil}},
+			},
+			Right: []*Row{
+				{[]any{nil, nil}},
+				{[]any{int32(1), "AA"}},
+				{[]any{int32(2), "B"}},
+				{[]any{int32(3), "C"}},
+				{[]any{nil, nil}},
+				{[]any{int32(5), "EE"}},
+				{[]any{nil, nil}},
+				{[]any{int32(7), "GGG"}},
+				{[]any{int32(8), "H"}},
+				{[]any{nil, nil}},
+				{[]any{int32(10), "J"}},
+			},
+			ColNames: []string{"id", "name"},
 		}
 
 		if diff := cmp.Diff(expectedRowDiffs, rowDiffs); diff != "" {
