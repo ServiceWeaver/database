@@ -286,6 +286,16 @@ func (d *dbDiff) fillRowSlices(val []any, length int) []*Row {
 	return slice
 }
 
+// There will be 6 sections for non primary key row diff, {A+, A+ B+, B+, A-, A-B-, B-}
+// Note: A+ means A+ - B+, A+B+ means A+ intersect B+; A- means A- - B-; A-B- means A- intersect B-
+//
+//	left			|		middle		|		right
+//	A+				| 		nil			|		nil
+//	A+B+			| 		nil			|		A+B+
+//	nil				| 		nil			|		B+
+//	B-				| 		B-			|		nil
+//	nil				| 		A-B-		|		nil
+//	nil				| 		A-			|		A-
 func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableA.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", clonedTableA.View.Cols, clonedTableA.View.Cols)
@@ -423,6 +433,10 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 // left: A+, B- - A-
 // middle: A- intersect B-, A- - B-, B- - A-
 // right: B+, A- - B-
+// left we will show inserted in A, and deleted only from B
+// middle we will show distinct deleted from both A and B
+// right we will show inserted in B, and deleted only from A
+// because primary key is unique, so for each way there should be only one row with same primary key
 func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableB.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot diff", clonedTableA.View.Cols, clonedTableA.View.Cols)
