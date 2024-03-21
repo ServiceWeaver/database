@@ -145,8 +145,7 @@ func (d *dbDiff) minus(ctx context.Context, A interface{}, B interface{}, viewNa
 	ORDER BY %s);
 	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
 
-	_, err = d.connPool.Exec(ctx, query)
-	if err != nil {
+	if _, err = d.connPool.Exec(ctx, query); err != nil {
 		return nil, err
 	}
 
@@ -170,11 +169,9 @@ func (d *dbDiff) intersect(ctx context.Context, A interface{}, B interface{}, vi
 	ORDER BY %s);
 	`, viewName, strings.Join(colNames, ", "), nameA, strings.Join(colNames, ", "), nameB, strings.Join(colNames, ", "))
 
-	_, err = d.connPool.Exec(ctx, query)
-	if err != nil {
+	if _, err = d.connPool.Exec(ctx, query); err != nil {
 		return nil, err
 	}
-
 	return &view{Name: viewName, Cols: cols}, nil
 }
 
@@ -242,10 +239,10 @@ func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view,
 	ORDER BY %s);
 	`, viewName, strings.Join(primaryCols, ","), strings.Join(primaryCols, ","), aPlus.Name, strings.Join(primaryCols, ","), aMinus.Name, strings.Join(primaryCols, ","), bPlus.Name, strings.Join(primaryCols, ","), bMinus.Name, strings.Join(primaryCols, ","))
 
-	_, err := d.connPool.Exec(ctx, query)
-	if err != nil {
+	if _, err := d.connPool.Exec(ctx, query); err != nil {
 		return nil, err
 	}
+
 	cols := map[string]column{}
 	for _, colName := range primaryCols {
 		cols[colName] = clonedTableA.View.Cols[colName]
