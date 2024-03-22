@@ -137,16 +137,18 @@ func switchRPlusRMinusCloning(dbPort string) error {
 
 	postgresdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/postgresdb?sslmode=disable", dbPort)
 
-	err := dbclone.Clone(ctx, postgresdbUrl)
+	postgresdb, err := dbclone.Clone(ctx, postgresdbUrl)
 	if err != nil {
 		return err
 	}
+	defer postgresdb.Close()
 
 	accountdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/accountsdb?sslmode=disable", dbPort)
-	err = dbclone.Clone(ctx, accountdbUrl)
+	accountsdb, err := dbclone.Clone(ctx, accountdbUrl)
 	if err != nil {
 		return err
 	}
+	defer accountsdb.Close()
 
 	return nil
 }
