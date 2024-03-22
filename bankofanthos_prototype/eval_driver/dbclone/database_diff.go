@@ -285,10 +285,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	views = append(views, aPlusOnly)
 
 	// TODO: switch to a single nil value rather than a row of nils
-	var nilRow []any
-	for range colNames {
-		nilRow = append(nilRow, nil)
-	}
+	nilRow := make([]any, len(colNames))
 
 	nilSlices := d.fillRowSlices(nilRow, len(aPlusRows))
 	aPlusDiff := &Diff{Left: aPlusRows, Middle: nilSlices, Right: nilSlices, ColNames: colNames}
