@@ -129,9 +129,6 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 	if err != nil {
 		return err
 	}
-	if result == "" {
-		return nil
-	}
 
 	// parse the result, get the lines and columns for the non-deterministic field
 	diffInfos, err := getDiffHelper(result)
@@ -142,7 +139,7 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 	data, err := proto.Marshal(diffInfos)
 	if err != nil {
 		fmt.Println("Failed to marshal:", err)
-		return nil
+		return err
 	}
 
 	// store baseline diffs protobuf in a file

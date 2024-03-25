@@ -42,7 +42,7 @@ readonly ENV_VARS=(
 add_transaction() {
     DATE=$(date -u +"%Y-%m-%d %H:%M:%S.%3N%z" --date="@$(($6))")
     echo "adding demo transaction: $1 -> $2"
-    PGPASSWORD="$POSTGRES_PASSWORD" psql -p55432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -v fromacct="$1" -v toacct="$2" -v fromroute="$3" -v toroute="$4" -v amount="$5" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+    PGPASSWORD="$POSTGRES_PASSWORD" psql -p5432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -v fromacct="$1" -v toacct="$2" -v fromroute="$3" -v toroute="$4" -v amount="$5" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
         INSERT INTO TRANSACTIONS (FROM_ACCT, TO_ACCT, FROM_ROUTE, TO_ROUTE, AMOUNT, TIMESTAMP)
         VALUES (:'fromacct', :'toacct', :'fromroute', :'toroute', :'amount', '$DATE');
 EOSQL

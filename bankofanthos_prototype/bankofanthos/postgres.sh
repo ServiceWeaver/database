@@ -17,7 +17,7 @@
 set -euo pipefail
 
 main() {
-  psql -U postgres -c "CREATE USER admin WITH PASSWORD 'admin';"
+  psql -U postgres -c "CREATE USER admin WITH SUPERUSER PASSWORD 'admin';"
   psql -U postgres -c "CREATE DATABASE postgresdb WITH OWNER admin;"
   psql -U postgres -c "CREATE DATABASE accountsdb WITH OWNER admin;"
   psql postgresdb admin -f /app/postgresdb.sql

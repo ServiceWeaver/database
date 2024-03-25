@@ -31,7 +31,7 @@ func alterViewName(ctx context.Context, connPool *pgxpool.Pool, newName string, 
 }
 
 func dropTable(ctx context.Context, connPool *pgxpool.Pool, name string) error {
-	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
+	query := fmt.Sprintf("DROP TABLE %s;", name)
 
 	_, err := connPool.Exec(ctx, query)
 
@@ -39,7 +39,7 @@ func dropTable(ctx context.Context, connPool *pgxpool.Pool, name string) error {
 }
 
 func dropView(ctx context.Context, connPool *pgxpool.Pool, name string) error {
-	query := fmt.Sprintf("DROP VIEW IF EXISTS %s;", name)
+	query := fmt.Sprintf("DROP VIEW %s;", name)
 
 	_, err := connPool.Exec(ctx, query)
 	return err

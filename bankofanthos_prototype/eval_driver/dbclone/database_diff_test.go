@@ -27,7 +27,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cloneDdl, err := newCloneDdl(ctx, database)
+	cloneDdl, err := newCloneDdl(ctx, database, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +70,11 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 	})
+
+	err = cloneDdl.reset(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	err = cloneDdl.close(ctx)
 	if err != nil {
@@ -238,7 +243,8 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 	})
 
 	t.Run("trimClonedTable", func(t *testing.T) {
-		cloneDdl, err := newCloneDdl(ctx, database)
+
+		cloneDdl, err := newCloneDdl(ctx, database, "trimtest")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -247,12 +253,12 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 
 		_, err = connPool.Exec(ctx,
 			`
-		INSERT INTO usersplus(accountid, username, passhash, birthday) VALUES
+		INSERT INTO trimtest.usersplus(accountid, username, passhash, birthday) VALUES
 		('101122611122', 'testuser', '1234', '2000-01-01'),
 		('103362343333', 'alice', '2345', '2001-01-01'),
 		('107744137744', 'eve', '3456', '2002-01-01');
 
-		INSERT INTO usersminus(accountid, username, passhash, birthday) VALUES
+		INSERT INTO trimtest.usersminus(accountid, username, passhash, birthday) VALUES
 		('101122611122', 'testuser', '1234', '2000-01-01'),
 		('107744137744', 'eve', '3456', '2003-01-01');
 		`)
@@ -307,6 +313,11 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		err = cloneDdl.reset(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		err = cloneDdl.close(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -342,7 +353,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cloneDdl, err := newCloneDdl(ctx, nonPrimaryDb)
+		cloneDdl, err := newCloneDdl(ctx, nonPrimaryDb, "test")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -411,6 +422,11 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
 
+		err = cloneDdl.reset(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		err = cloneDdl.close(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -459,7 +475,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		cloneDdl, err := newCloneDdl(ctx, nonPrimaryDb)
+		cloneDdl, err := newCloneDdl(ctx, nonPrimaryDb, "test")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -548,6 +564,11 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 
 		if diff := cmp.Diff(expectedRowDiffs, rowDiffs); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
+		}
+
+		err = cloneDdl.reset(ctx)
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		err = cloneDdl.close(ctx)

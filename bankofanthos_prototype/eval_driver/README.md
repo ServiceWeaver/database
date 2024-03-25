@@ -1,10 +1,9 @@
 ## Prereq
-- Install [neon](https://github.com/neondatabase/neon) locally under home directory
-
 - Install [Service Weaver](https://serviceweaver.dev/docs.html#what-is-service-weaver) locally
+- Install [Docker](https://www.docker.com/get-started) locally
 
 ## Instruction
-Before start the program, run startup script to establish the neon database
+Before start the program, run startup script to initialize database for bank of anthos.
 ```shell
 cd eval_driver
 ./startup.sh
@@ -15,26 +14,12 @@ Then running the program
 go run .
 ```
 
-## Connect to DB
+## Connect to DB for develop
 Note: DB port may be changed.
 ```shell
-# for clone baseline postgresdb
-psql -p55436 -h 127.0.0.1 -U admin postgresdb
-
-# for clone baseline accountsdb
-psql -p55436 -h 127.0.0.1 -U admin accountsdb
-
-# for clone experimental postgresdb
-psql -p55438 -h 127.0.0.1 -U admin postgresdb
-
-# for clone experimental accountsdb
-psql -p55438 -h 127.0.0.1 -U admin accountsdb
-```
-
-## Check Cloned DB banch
-```shell
-cd ~/neon
-cargo neon timeline list
+psql -h localhost -p 5432 -U postgres  # password: password
+psql -h localhost -p 5432 -U admin postgresdbsnapshot # password: admin
+psql -h localhost -p 5432 -U admin accountsdbsnapshot
 ```
 
 ## Running BOA app on service weaver 

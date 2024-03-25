@@ -1,24 +1,25 @@
 set -euo pipefail
 
 main() {
-# start neon
-cd ~/neon
-cargo neon stop
-cargo neon init --force
-cargo neon start
-cargo neon tenant create --set-default
-cargo neon endpoint create main
-cargo neon endpoint start main
+    
+docker stop $(docker ps -q -f "name=postgres") 
+
+docker run \
+    --rm \
+    --detach \
+    --name postgres \
+    --env POSTGRES_PASSWORD=password \
+    --volume="$(realpath postgres.sh):/app/postgres.sh" \
+    --volume="$(realpath postgresdb.sql):/app/postgresdb.sql" \
+    --volume="$(realpath accountsdb.sql):/app/accountsdb.sql" \
+    --volume="$(realpath 1_create_transactions.sh):/app/1_create_transactions.sh" \
+    --publish 127.0.0.1:5432:5432 \
+    postgres:15
+
+sleep 2
 
 # establish database
-psql -p55432 -U cloud_admin postgres -h 127.0.0.1 -c "CREATE USER admin WITH PASSWORD 'admin';"
-psql -p55432 -U cloud_admin postgres -h 127.0.0.1 -c "CREATE DATABASE postgresdb WITH OWNER admin;"
-psql -p55432 -U cloud_admin postgres -h 127.0.0.1 -c "CREATE DATABASE accountsdb WITH OWNER admin;"
-
-psql -p55432 -h 127.0.0.1 postgresdb admin -f ~/database/bankofanthos_prototype/bankofanthos/postgresdb.sql
-psql -p55432 -h 127.0.0.1 accountsdb admin -f ~/database/bankofanthos_prototype/bankofanthos/accountsdb.sql
-
-POSTGRES_DB=postgresdb POSTGRES_USER=admin POSTGRES_PASSWORD=admin LOCAL_ROUTING_NUM=883745000 USE_DEMO_DATA=True ~/database/bankofanthos_prototype/bankofanthos/1_create_transactions.sh
+docker exec -it postgres /app/postgres.sh
 
 openssl genrsa -out jwtRS256.key 4096
 openssl rsa -in jwtRS256.key -outform PEM -pubout -out jwtRS256.key.pub
