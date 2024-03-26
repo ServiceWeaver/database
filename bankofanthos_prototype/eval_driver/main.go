@@ -11,7 +11,6 @@ import (
 	"bankofanthos_prototype/eval_driver/dbclone"
 	"bankofanthos_prototype/eval_driver/diff"
 	"bankofanthos_prototype/eval_driver/service"
-	"bankofanthos_prototype/eval_driver/utility"
 
 	"github.com/gookit/color"
 )
@@ -22,7 +21,6 @@ var (
 	configPath            = "configs/"
 	logPath               = "logs/"
 	outPath               = "out/"
-	snapshotPath          = "snapshot/"
 	v1Config              = "../bankofanthos/weaver.toml"
 	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
@@ -94,17 +92,16 @@ func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
 func main() {
 	// parse flags
 	var origListenPort, expListenPort, baseListenPort, dbUrls string
-	var dropSnapshotDB, dropClonedTables bool
+	var dropClonedTables bool
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
 	flag.StringVar(&baseListenPort, "expListenPort", "9001", "Listen port for experimental service.")
 	flag.StringVar(&expListenPort, "baseListenPort", "9002", "Listen port for baseline service.")
 	flag.StringVar(&dbUrls, "dbUrls", "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable,postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable", "database urls used for app; split by ,")
-	flag.BoolVar(&dropSnapshotDB, "dropSnapshotDB", false, "Drop snapshot DB at the end of eval run")
 	flag.BoolVar(&dropClonedTables, "dropClonedTables", true, "Drop cloned tables at the end of eval run, only set false for investigation purpose")
 	flag.Parse()
 
 	// create directories to store eval info
-	dirs := []string{configPath, logPath, outPath, nonDeterministicField, snapshotPath}
+	dirs := []string{configPath, logPath, outPath, nonDeterministicField}
 	for _, dir := range dirs {
 		err := os.RemoveAll(dir)
 		if err != nil {
@@ -127,13 +124,6 @@ func main() {
 		prodDbs[db.Name] = db
 	}
 
-	// take snapshot of prod database
-	for dbName, db := range prodDbs {
-		if err := service.TakeSnapshot(db, snapshotPath+dbName+".sql"); err != nil {
-			log.Fatalf("Failed to take snapshot for %s: %v", dbName, err)
-		}
-	}
-
 	// get the service running in prod
 	baseProdService := service.ProdService{
 		ConfigPath: v1Config,
@@ -146,16 +136,6 @@ func main() {
 		ListenPort: origListenPort,
 		Bin:        v2Bin,
 		Databases:  prodDbs,
-	}
-
-	// restore snapshot to a new sanpshotdb
-	dbSnapshots := map[string]*service.Database{}
-	for dbName, db := range prodDbs {
-		snpashotDb, err := service.RestoreSnapshot(snapshotPath+dbName+".sql", db)
-		if err != nil {
-			log.Fatalf("Failed to restore snapshot for %s: %v", dbName, err)
-		}
-		dbSnapshots[snpashotDb.Name] = snpashotDb
 	}
 
 	ctx := context.Background()
@@ -171,15 +151,15 @@ func main() {
 
 	// run baseline service
 	var clonedDBBs []*dbclone.ClonedDb
-	for _, snapshot := range dbSnapshots {
-		db, err := service.CloneDB(ctx, snapshot, "B")
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "B")
 		if err != nil {
-			log.Fatalf("Cloned snapshotDB %s failed: %v", snapshot.Name, err)
+			log.Fatalf("Cloned DB %s failed: %v", prodDb.Name, err)
 		}
 		clonedDBBs = append(clonedDBBs, db)
 	}
 
-	baselineService, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], dbSnapshots)
+	baselineService, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
@@ -193,16 +173,16 @@ func main() {
 
 	// run baseline service2
 	var clonedDBBTwos []*dbclone.ClonedDb
-	for _, snapshot := range dbSnapshots {
-		db, err := service.CloneDB(ctx, snapshot, "BTWO")
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "BTWO")
 		if err != nil {
-			log.Fatalf("Cloned snapshotDB %s failed: %v", snapshot.Name, err)
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
 		}
 		clonedDBBTwos = append(clonedDBBTwos, db)
 	}
 
 	runCnt += 1
-	baselineService2, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], dbSnapshots)
+	baselineService2, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
@@ -221,16 +201,16 @@ func main() {
 
 	// run experimental service
 	var clonedDBEs []*dbclone.ClonedDb
-	for _, snapshot := range dbSnapshots {
-		db, err := service.CloneDB(ctx, snapshot, "E")
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "E")
 		if err != nil {
-			log.Fatalf("Cloned snapshotDB %s failed: %v", snapshot.Name, err)
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
 		}
 		clonedDBEs = append(clonedDBEs, db)
 	}
 
 	runCnt += 1
-	experientalService, err := service.Init(runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt], dbSnapshots)
+	experientalService, err := service.Init(runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
@@ -256,17 +236,17 @@ func main() {
 
 	// run requests on both baseline and experiental
 	var clonedDBBEs []*dbclone.ClonedDb
-	for _, snapshot := range dbSnapshots {
-		db, err := service.CloneDB(ctx, snapshot, "BE")
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "BE")
 		if err != nil {
-			log.Fatalf("Cloned snapshotDB %s failed: %v", snapshot.Name, err)
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
 		}
 
 		clonedDBBEs = append(clonedDBBEs, db)
 	}
 
 	runCnt += 1
-	b1E1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], dbSnapshots)
+	b1E1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
@@ -294,17 +274,17 @@ func main() {
 
 	// run requests on both experiental and baseline
 	var clonedDBEBs []*dbclone.ClonedDb
-	for _, snapshot := range dbSnapshots {
-		db, err := service.CloneDB(ctx, snapshot, "EB")
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "EB")
 		if err != nil {
-			log.Fatalf("Cloned snapshotDB %s failed: %v", snapshot.Name, err)
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
 		}
 		clonedDBEBs = append(clonedDBEBs, db)
 	}
 
 	runCnt += 1
 
-	e1B1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], dbSnapshots)
+	e1B1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
@@ -333,15 +313,6 @@ func main() {
 		for _, cloned := range allClonedDbs {
 			if err = cloned.Close(ctx); err != nil {
 				log.Fatalf("Close cloned database failed: %v", err)
-			}
-		}
-	}
-
-	if dropClonedTables && dropSnapshotDB {
-		for dbName := range dbSnapshots {
-			origDb := utility.GetProdDbNameBySnapshot(dbName)
-			if err = service.CloseSnapshotDB(baseProdService.Databases[origDb], dbName); err != nil {
-				log.Fatalf("Close snapshotDB %s failed: %v", dbName, err)
 			}
 		}
 	}

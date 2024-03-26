@@ -1,10 +1,7 @@
 package utility
 
-import "strings"
-
 func GetProdDbNameBySnapshot(name string) string {
-	n := strings.LastIndex(name, "snapshot")
-	return name[:n]
+	return name[:len(name)-len("snapshot")]
 }
 
 func GetSnapshotDbNameByProd(name string) string {

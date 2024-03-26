@@ -18,8 +18,8 @@ go run .
 Note: DB port may be changed.
 ```shell
 psql -h localhost -p 5432 -U postgres  # password: password
-psql -h localhost -p 5432 -U admin postgresdbsnapshot # password: admin
-psql -h localhost -p 5432 -U admin accountsdbsnapshot
+psql -h localhost -p 5432 -U admin postgresdb # password: admin
+psql -h localhost -p 5432 -U admin accountsdb
 ```
 
 ## Running BOA app on service weaver 

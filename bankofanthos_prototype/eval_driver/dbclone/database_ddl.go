@@ -132,10 +132,10 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 func (c *cloneDdl) alterViewSchema(ctx context.Context, view *view) error {
 	query := fmt.Sprintf("ALTER VIEW %s SET SCHEMA %s;", view.Name, c.namespace)
 
-	_, err := c.database.connPool.Exec(ctx, query)
-	if err != nil {
+	if _, err := c.database.connPool.Exec(ctx, query); err != nil {
 		return err
 	}
+
 	view.Name = c.namespace + "." + view.Name
 
 	return nil

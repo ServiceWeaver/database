@@ -12,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"bankofanthos_prototype/eval_driver/utility"
-
 	"golang.org/x/net/publicsuffix"
 )
 
@@ -94,13 +92,7 @@ func (s Service) generateConfig(configPath, listenPort string, prodService ProdS
 		return err
 	}
 
-	configStr := string(configByte)
-	for name, db := range prodService.Databases {
-		snapshotName := utility.GetSnapshotDbNameByProd(name)
-		configStr = strings.ReplaceAll(configStr, db.Url, s.Databases[snapshotName].Url)
-	}
-
-	configStr = strings.ReplaceAll(configStr, prodService.ListenPort, listenPort)
+	configStr := strings.ReplaceAll(string(configByte), prodService.ListenPort, listenPort)
 
 	file, err := os.Create(configPath)
 	if err != nil {

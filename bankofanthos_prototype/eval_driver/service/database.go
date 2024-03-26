@@ -27,7 +27,7 @@ func dumpDb(dbDumpPath string) error {
 	transactionsColumns := []string{"transaction_id", "from_acct", "to_acct", "from_route", "to_route", "amount", "timestamp"}
 	transactionsQuery := fmt.Sprintf("SELECT %s FROM transactions ORDER BY %s;", strings.Join(transactionsColumns, ","), strings.Join(transactionsColumns, ","))
 
-	url := "postgresql://admin:admin@localhost:5432/postgresdbsnapshot?sslmode=disable"
+	url := "postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable"
 	dumpPostgresdbCmd := exec.Command("psql", url, "-c", transactionsQuery)
 	dumpPostgresdbCmd.Stdout = outfile
 	dumpPostgresdbCmd.Stderr = outfile
@@ -42,7 +42,7 @@ func dumpDb(dbDumpPath string) error {
 
 	contactsColumns := []string{"username", "label", "account_num", "routing_num", "is_external"}
 	contactsQuery := fmt.Sprintf("SELECT %s FROM Contacts ORDER BY %s;", strings.Join(contactsColumns, ","), strings.Join(contactsColumns, ","))
-	url = "postgresql://admin:admin@localhost:5432/accountsdbsnapshot?sslmode=disable"
+	url = "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable"
 	dumpAccountsdbCmd := exec.Command("psql", url, "-c", usersQuery, "-c", contactsQuery)
 	dumpAccountsdbCmd.Stdout = outfile
 	dumpPostgresdbCmd.Stderr = outfile
