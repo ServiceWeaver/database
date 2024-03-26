@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
+	"bankofanthos_prototype/eval_driver/dbclone"
 	"bankofanthos_prototype/eval_driver/diff"
 	"bankofanthos_prototype/eval_driver/service"
 
@@ -18,7 +21,6 @@ var (
 	configPath            = "configs/"
 	logPath               = "logs/"
 	outPath               = "out/"
-	snapshotPath          = "snapshot/"
 	v1Config              = "../bankofanthos/weaver.toml"
 	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
@@ -76,118 +78,111 @@ func requestsPorts(l service.ListOfReqs, numOfRuns int, baseListenPort, expListe
 	return allPorts, nil
 }
 
+func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
+	posS := strings.LastIndex(databaseUrl, "/")
+	posE := strings.Index(databaseUrl, "?")
+
+	if posS == -1 {
+		return nil, fmt.Errorf("database name not found in URL")
+	}
+
+	return &service.Database{Name: databaseUrl[posS+1 : posE], Url: databaseUrl}, nil
+}
+
 func main() {
 	// parse flags
-	var runs int
-	var origListenPort, expListenPort, baseListenPort, databasePort string
-	flag.IntVar(&runs, "runs", 5, "Total runs for the same request set.")
+	var origListenPort, expListenPort, baseListenPort, dbUrls string
+	var dropClonedTables bool
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
 	flag.StringVar(&baseListenPort, "expListenPort", "9001", "Listen port for experimental service.")
 	flag.StringVar(&expListenPort, "baseListenPort", "9002", "Listen port for baseline service.")
-	flag.StringVar(&databasePort, "databasePort", "55432", "Listen port for experimental service.")
+	flag.StringVar(&dbUrls, "dbUrls", "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable,postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable", "database urls used for app; split by ,")
+	flag.BoolVar(&dropClonedTables, "dropClonedTables", true, "Drop cloned tables at the end of eval run, only set false for investigation purpose")
 	flag.Parse()
 
-	// create config dir
-	err := os.RemoveAll(configPath)
-	if err != nil {
-		log.Fatalf("Remove %s failed: %v", configPath, err)
-	}
-	err = os.Mkdir(configPath, 0700)
-	if err != nil {
-		log.Fatalf("Mkdir %s failed: %v", configPath, err)
-	}
-
-	// create log dir
-	err = os.RemoveAll(logPath)
-	if err != nil {
-		log.Fatalf("Remove %s failed: %v", logPath, err)
-	}
-	err = os.Mkdir(logPath, 0700)
-	if err != nil {
-		log.Fatalf("Mkdir %s failed: %v", logPath, err)
+	// create directories to store eval info
+	dirs := []string{configPath, logPath, outPath, nonDeterministicField}
+	for _, dir := range dirs {
+		err := os.RemoveAll(dir)
+		if err != nil {
+			log.Fatalf("Remove %s failed: %v", dir, err)
+		}
+		err = os.Mkdir(dir, 0700)
+		if err != nil {
+			log.Fatalf("Mkdir %s failed: %v", dir, err)
+		}
 	}
 
-	// create out dir
-	err = os.RemoveAll(outPath)
-	if err != nil {
-		log.Fatalf("Remove %s failed: %v", outPath, err)
-	}
-	err = os.Mkdir(outPath, 0700)
-	if err != nil {
-		log.Fatalf("Mkdir %s failed: %v", outPath, err)
-	}
-
-	// create non-deterministic dir
-	err = os.RemoveAll(nonDeterministicField)
-	if err != nil {
-		log.Fatalf("Remove %s failed: %v", nonDeterministicField, err)
-	}
-	err = os.Mkdir(nonDeterministicField, 0700)
-	if err != nil {
-		log.Fatalf("Mkdir %s failed: %v", nonDeterministicField, err)
-	}
-
-	// create snapshot dir
-	err = os.RemoveAll(snapshotPath)
-	if err != nil {
-		log.Fatalf("Remove %s failed: %v", snapshotPath, err)
-	}
-	err = os.Mkdir(snapshotPath, 0700)
-	if err != nil {
-		log.Fatalf("Mkdir %s failed: %v", snapshotPath, err)
+	// get prod database
+	urlSlice := strings.Split(dbUrls, ",")
+	prodDbs := map[string]*service.Database{}
+	for _, url := range urlSlice {
+		db, err := getDatabaseFromURL(url)
+		if err != nil {
+			log.Fatalf("Parse databse url %s failed: %v", url, err)
+		}
+		prodDbs[db.Name] = db
 	}
 
 	// get the service running in prod
 	baseProdService := service.ProdService{
 		ConfigPath: v1Config,
-		DbPort:     databasePort,
 		ListenPort: origListenPort,
 		Bin:        v1Bin,
+		Databases:  prodDbs,
 	}
 	experimentalProdService := service.ProdService{
 		ConfigPath: v2Config,
-		DbPort:     databasePort,
 		ListenPort: origListenPort,
 		Bin:        v2Bin,
+		Databases:  prodDbs,
 	}
 
+	ctx := context.Background()
+
+	var allClonedDbs []*dbclone.ClonedDb
 	runCnt := 0
 
-	// cloned prod database
-	clonedDb, err := service.CloneNeonDatabase("replica", "main", false)
-	if err != nil {
-		log.Fatalf("Cloned database failed: %v", err)
-	}
-	fmt.Printf("Cloned database %+v\n", clonedDb)
-
 	// generate traffic patterns
-	allPorts, err := requestsPorts(service.ListOfReqs1, runs, baseListenPort, expListenPort)
+	allPorts, err := requestsPorts(service.ListOfReqs1, 5, baseListenPort, expListenPort)
 	if err != nil {
 		log.Fatalf("Failed to generate traffic patterns: %v", err)
 	}
 
 	// run baseline service
-	clonedDbB, err := service.CloneNeonDatabase("cloneB", clonedDb.Branch, false)
-	if err != nil {
-		log.Fatalf("Cloned database failed: %v", err)
+	var clonedDBBs []*dbclone.ClonedDb
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "B")
+		if err != nil {
+			log.Fatalf("Cloned DB %s failed: %v", prodDb.Name, err)
+		}
+		clonedDBBs = append(clonedDBBs, db)
 	}
-	fmt.Printf("Cloned database is: %v\n", clonedDbB)
 
-	baselineService, err := service.Init(runCnt, []string{baseListenPort}, clonedDbB.Port, []service.ProdService{baseProdService}, allPorts[runCnt])
+	baselineService, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
 	baselineService.Run(service.ListOfReqs1)
+	allClonedDbs = append(allClonedDbs, clonedDBBs...)
+	for _, db := range clonedDBBs {
+		if err = db.Reset(ctx); err != nil {
+			log.Fatalf("Reset cloned database failed: %v", err)
+		}
+	}
 
 	// run baseline service2
-	clonedDbB2, err := service.CloneNeonDatabase("cloneB2", clonedDb.Branch, false)
-	if err != nil {
-		log.Fatalf("Cloned database failed: %v", err)
+	var clonedDBBTwos []*dbclone.ClonedDb
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "BTWO")
+		if err != nil {
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
+		}
+		clonedDBBTwos = append(clonedDBBTwos, db)
 	}
-	fmt.Printf("Cloned database is: %v\n", clonedDbB)
 
 	runCnt += 1
-	baselineService2, err := service.Init(runCnt, []string{baseListenPort}, clonedDbB2.Port, []service.ProdService{baseProdService}, allPorts[runCnt])
+	baselineService2, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
@@ -196,19 +191,26 @@ func main() {
 	if err := diff.GetNonDeterministic(baselineService, baselineService2); err != nil {
 		log.Fatalf("Get non deterministic error failed: %v", err)
 	}
-	if runs == 2 {
-		return
+
+	allClonedDbs = append(allClonedDbs, clonedDBBTwos...)
+	for _, db := range clonedDBBTwos {
+		if err = db.Reset(ctx); err != nil {
+			log.Fatalf("Reset cloned database failed: %v", err)
+		}
 	}
 
 	// run experimental service
-	clonedDbE, err := service.CloneNeonDatabase("cloneE", clonedDb.Branch, true)
-	if err != nil {
-		log.Fatalf("Cloned database failed: %v", err)
+	var clonedDBEs []*dbclone.ClonedDb
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "E")
+		if err != nil {
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
+		}
+		clonedDBEs = append(clonedDBEs, db)
 	}
-	fmt.Printf("Cloned database is: %+v\n", clonedDbE)
 
 	runCnt += 1
-	experientalService, err := service.Init(runCnt, []string{expListenPort}, clonedDbE.Port, []service.ProdService{experimentalProdService}, allPorts[runCnt])
+	experientalService, err := service.Init(runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init service failed: %v", err)
 	}
@@ -225,19 +227,26 @@ func main() {
 	if eq1 && eq2 {
 		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, experientalService.Runs)
 	}
-
-	if runs == 3 {
-		return
+	allClonedDbs = append(allClonedDbs, clonedDBEs...)
+	for _, db := range clonedDBEs {
+		if err = db.Reset(ctx); err != nil {
+			log.Fatalf("Reset cloned database failed: %v", err)
+		}
 	}
 
 	// run requests on both baseline and experiental
-	clonedDbB1E1, err := service.CloneNeonDatabase("cloneB1E1", clonedDb.Branch, true)
-	if err != nil {
-		log.Fatalf("Cloned database failed: %v", err)
+	var clonedDBBEs []*dbclone.ClonedDb
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "BE")
+		if err != nil {
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
+		}
+
+		clonedDBBEs = append(clonedDBBEs, db)
 	}
-	fmt.Printf("Cloned database is: %+v\n", clonedDbB1E1)
+
 	runCnt += 1
-	b1E1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, clonedDbB1E1.Port, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	b1E1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
@@ -255,19 +264,27 @@ func main() {
 	if eq1 && eq2 {
 		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, b1E1Service.Runs)
 	}
-	if runs == 4 {
-		return
+
+	allClonedDbs = append(allClonedDbs, clonedDBBEs...)
+	for _, db := range clonedDBBEs {
+		if err = db.Reset(ctx); err != nil {
+			log.Fatalf("Reset cloned database failed: %v", err)
+		}
 	}
 
 	// run requests on both experiental and baseline
-	clonedDbE1B1, err := service.CloneNeonDatabase("cloneE1B1", clonedDb.Branch, true)
-	if err != nil {
-		log.Fatalf("Cloned database failed: %v", err)
+	var clonedDBEBs []*dbclone.ClonedDb
+	for _, prodDb := range prodDbs {
+		db, err := service.CloneDB(ctx, prodDb, "EB")
+		if err != nil {
+			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
+		}
+		clonedDBEBs = append(clonedDBEBs, db)
 	}
-	fmt.Printf("Cloned database is: %+v\n", clonedDbE1B1)
+
 	runCnt += 1
 
-	e1B1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, clonedDbE1B1.Port, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	e1B1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], prodDbs)
 	if err != nil {
 		log.Fatalf("Init B1E1 service failed: %v", err)
 	}
@@ -285,10 +302,20 @@ func main() {
 		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, e1B1Service.Runs)
 	}
 
-	if runs == 5 {
-		return
+	allClonedDbs = append(allClonedDbs, clonedDBEBs...)
+	for _, db := range clonedDBEBs {
+		if err = db.Reset(ctx); err != nil {
+			log.Fatalf("Reset cloned database failed: %v", err)
+		}
+	}
+
+	if dropClonedTables {
+		for _, cloned := range allClonedDbs {
+			if err = cloned.Close(ctx); err != nil {
+				log.Fatalf("Close cloned database failed: %v", err)
+			}
+		}
 	}
 
 	fmt.Println("Exiting program...")
-	return
 }

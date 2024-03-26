@@ -2,158 +2,21 @@ package service
 
 import (
 	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/utility"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
-type database struct {
-	Branch string
-	Port   string
+type Database struct {
+	Name string
+	Url  string
 }
 
-func getDatabaseByBranchName(branchName string) (database, error) {
-	database := database{}
-
-	// list all endpoints
-	listCmd := exec.Command("cargo", "neon", "endpoint", "list")
-
-	listOuput, err := listCmd.Output()
-	if err != nil {
-		return database, fmt.Errorf("failed to create a new branch: %v", err)
-	}
-	fmt.Printf("Endpoint list output:\n %s\n", listOuput)
-
-	// parse output for all neon database endpoints
-	var address string
-	lines := strings.Split(string(listOuput), "\n")
-
-	// find the address of given branch name
-	for _, line := range lines[1:] {
-		newLine := strings.Join(strings.Fields(strings.TrimSpace(line)), " ")
-		for j, word := range strings.Split(newLine, " ") {
-			if j == 0 && word != branchName {
-				break
-			}
-			if j == 1 {
-				address = word
-				break
-			}
-		}
-	}
-
-	// fail to find the branch
-	if address == "" {
-		fmt.Printf("Failed to find branch %s\n", branchName)
-		return database, nil
-	}
-
-	database.Port = strings.Split(address, ":")[1]
-	database.Branch = branchName
-
-	return database, nil
-}
-
-// cloneDatabase clones a database from ancestorBranchName if it does not exist.
-func CloneNeonDatabase(branchName, ancestorBranchName string, switchCloning bool) (database, error) {
-	db := database{}
-
-	// running database fork command under neon directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting current directory: %v\n", err)
-		return db, err
-	}
-
-	home, _ := os.UserHomeDir()
-	err = os.Chdir(filepath.Join(home, "neon"))
-
-	if err != nil {
-		fmt.Printf("Error changing directory: %v\n", err)
-		return db, err
-	}
-	defer func() {
-		err := os.Chdir(currentDir)
-		if err != nil {
-			fmt.Printf("Error changing back to original directory: %v\n", err)
-			return
-		}
-	}()
-
-	existingDb, err := getDatabaseByBranchName(branchName)
-	if err != nil {
-		return db, nil
-	}
-	if existingDb.Branch == branchName && existingDb.Port != "" {
-		return existingDb, nil
-	}
-
-	// create a new branch
-	cloneCmd := exec.Command("cargo", "neon", "timeline", "branch", "--ancestor-branch-name", ancestorBranchName, "--branch-name", branchName)
-
-	err = cloneCmd.Run()
-	if err != nil {
-		return db, fmt.Errorf("failed to create a new branch: %v", err)
-	}
-
-	// create progressql on that branch
-	createPostgresCmd := exec.Command("cargo", "neon", "endpoint", "create", branchName, "--branch-name", branchName)
-	err = createPostgresCmd.Run()
-	if err != nil {
-		return db, fmt.Errorf("failed to create a postgres on the branch: %v", err)
-	}
-
-	// start postgresql on that branch
-	startCmd := exec.Command("cargo", "neon", "endpoint", "start", branchName)
-	err = startCmd.Run()
-	if err != nil {
-		return db, fmt.Errorf("failed to start postgres on the branch: %v", err)
-	}
-
-	db, err = getDatabaseByBranchName(branchName)
-	if err != nil {
-		return db, err
-	}
-
-	if switchCloning {
-		err = os.Chdir(currentDir)
-		if err != nil {
-			fmt.Printf("Error changing back to original directory: %v\n", err)
-			return db, err
-		}
-		err = switchRPlusRMinusCloning(db.Port)
-		return db, err
-	}
-
-	return db, err
-}
-
-func switchRPlusRMinusCloning(dbPort string) error {
-	fmt.Printf("Switching to R+/R- cloning database at port %s\n", dbPort)
-	ctx := context.Background()
-
-	postgresdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/postgresdb?sslmode=disable", dbPort)
-
-	postgresdb, err := dbclone.Clone(ctx, postgresdbUrl)
-	if err != nil {
-		return err
-	}
-	defer postgresdb.Close()
-
-	accountdbUrl := fmt.Sprintf("postgresql://admin:admin@localhost:%s/accountsdb?sslmode=disable", dbPort)
-	accountsdb, err := dbclone.Clone(ctx, accountdbUrl)
-	if err != nil {
-		return err
-	}
-	defer accountsdb.Close()
-
-	return nil
-}
-
-func dumpDb(dbPort, dbDumpPath string) error {
+// This function will be deprecated soon after integrating with database three way diff
+func dumpDb(dbDumpPath string) error {
 	outfile, err := os.Create(dbDumpPath)
 	if err != nil {
 		panic(err)
@@ -164,7 +27,8 @@ func dumpDb(dbPort, dbDumpPath string) error {
 	transactionsColumns := []string{"transaction_id", "from_acct", "to_acct", "from_route", "to_route", "amount", "timestamp"}
 	transactionsQuery := fmt.Sprintf("SELECT %s FROM transactions ORDER BY %s;", strings.Join(transactionsColumns, ","), strings.Join(transactionsColumns, ","))
 
-	dumpPostgresdbCmd := exec.Command("psql", "-p", dbPort, "-h", "127.0.0.1", "-U", "admin", "postgresdb", "-c", transactionsQuery)
+	url := "postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable"
+	dumpPostgresdbCmd := exec.Command("psql", url, "-c", transactionsQuery)
 	dumpPostgresdbCmd.Stdout = outfile
 	dumpPostgresdbCmd.Stderr = outfile
 	err = dumpPostgresdbCmd.Run()
@@ -178,7 +42,8 @@ func dumpDb(dbPort, dbDumpPath string) error {
 
 	contactsColumns := []string{"username", "label", "account_num", "routing_num", "is_external"}
 	contactsQuery := fmt.Sprintf("SELECT %s FROM Contacts ORDER BY %s;", strings.Join(contactsColumns, ","), strings.Join(contactsColumns, ","))
-	dumpAccountsdbCmd := exec.Command("psql", "-p", dbPort, "-h", "127.0.0.1", "-U", "admin", "accountsdb", "-c", usersQuery, "-c", contactsQuery)
+	url = "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable"
+	dumpAccountsdbCmd := exec.Command("psql", url, "-c", usersQuery, "-c", contactsQuery)
 	dumpAccountsdbCmd.Stdout = outfile
 	dumpPostgresdbCmd.Stderr = outfile
 
@@ -186,7 +51,61 @@ func dumpDb(dbPort, dbDumpPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to dump accountsdb: %v", err)
 	}
-
-	fmt.Printf("Successfully dump port %s to %s\n", dbPort, dbDumpPath)
 	return nil
+}
+
+func TakeSnapshot(db *Database, snapshotPath string) error {
+	cmd := exec.Command("pg_dump", db.Url, "-f", snapshotPath)
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to take snapshot, %w", err)
+	}
+
+	return nil
+}
+
+func dbExists(name string, prodDb *Database) (bool, error) {
+	cmd := exec.Command("psql", prodDb.Url, "-c", fmt.Sprintf(`\l %s`, name))
+	out, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("failed check database exist, %w", err)
+	}
+	exists := strings.Contains(string(out), name)
+	return exists, nil
+}
+
+// RestoreSnapshot creates a separate snapshot db if not exist, and restore prod db to snapshot db
+func RestoreSnapshot(snapshotPath string, prodDb *Database) (*Database, error) {
+	dbName := utility.GetSnapshotDbNameByProd(prodDb.Name)
+	exists, err := dbExists(dbName, prodDb)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		createQuery := fmt.Sprintf("CREATE DATABASE %s;", dbName)
+		createCmd := exec.Command("psql", prodDb.Url, "-c", createQuery)
+		err := createCmd.Run()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create snapshot database, %w", err)
+		}
+	}
+
+	snapshotUrl := strings.ReplaceAll(prodDb.Url, prodDb.Name, dbName)
+	snapshot := &Database{Name: dbName, Url: snapshotUrl}
+	restoreCmd := exec.Command("psql", snapshot.Url, "-f", snapshotPath)
+	err = restoreCmd.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to restore snapshot, %w", err)
+	}
+	return snapshot, nil
+}
+
+func CloneDB(ctx context.Context, snapshot *Database, namespace string) (*dbclone.ClonedDb, error) {
+	return dbclone.Clone(ctx, snapshot.Url, namespace)
+}
+
+func CloseSnapshotDB(prod *Database, snapshotName string) error {
+	query := fmt.Sprintf("DROP DATABASE %s;", snapshotName)
+	cmd := exec.Command("psql", prod.Url, "-c", query)
+	return cmd.Run()
 }

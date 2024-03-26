@@ -138,11 +138,12 @@ func (d *database) getDatabaseMetadata(ctx context.Context) error {
 	return nil
 }
 
+// TODO: now only list all tables in public, handle schemaname is not public.
 func (d *database) listTables(ctx context.Context) ([]string, error) {
 	var tables []string
 	query := `SELECT tablename 
 	FROM pg_catalog.pg_tables 
-	WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'`
+	WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema' AND schemaname = 'public'`
 
 	rows, err := d.connPool.Query(ctx, query)
 	if err != nil {

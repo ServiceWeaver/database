@@ -26,7 +26,7 @@ func TestCreateCloneDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cloneDdl, err := newCloneDdl(ctx, database)
+	cloneDdl, err := newCloneDdl(ctx, database, "test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,13 +54,13 @@ func TestCreateCloneDatabase(t *testing.T) {
 				},
 			},
 			Plus: &table{
-				Name: "contactsplus",
+				Name: "test.contactsplus",
 				Cols: map[string]column{
 					"username":    {Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"},
 					"account_num": {Name: "account_num", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"},
 					"is_external": {Name: "is_external", DataType: "boolean", Nullable: "NO"},
 				}},
-			Minus: &table{Name: "contactsminus",
+			Minus: &table{Name: "test.contactsminus",
 				Cols: map[string]column{
 					"username":    {Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"},
 					"account_num": {Name: "account_num", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"},
@@ -97,7 +97,7 @@ func TestCreateCloneDatabase(t *testing.T) {
 				},
 			},
 			Plus: &table{
-				Name: "usersplus",
+				Name: "test.usersplus",
 				Cols: map[string]column{
 					"accountid": {Name: "accountid", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"},
 					"username":  {Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"},
@@ -105,7 +105,7 @@ func TestCreateCloneDatabase(t *testing.T) {
 					"birthday":  {Name: "birthday", DataType: "date", Nullable: "YES"},
 				},
 			},
-			Minus: &table{Name: "usersminus",
+			Minus: &table{Name: "test.usersminus",
 				Cols: map[string]column{
 					"accountid": {Name: "accountid", DataType: "character", CharacterMaximumLength: 12, Nullable: "NO"},
 					"username":  {Name: "username", DataType: "character varying", CharacterMaximumLength: 64, Nullable: "NO"},
@@ -128,6 +128,12 @@ func TestCreateCloneDatabase(t *testing.T) {
 		if diff := cmp.Diff(expectedUserTable, cloneDdl.clonedTables["users"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
+
+		err = cloneDdl.reset(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		err = cloneDdl.close(ctx)
 		if err != nil {
 			t.Fatal(err)

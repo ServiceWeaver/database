@@ -16,42 +16,41 @@ import (
 )
 
 var (
-	configPath   = "configs/"
-	logPath      = "logs/"
-	outPath      = "out/"
-	snapshotPath = "snapshot/"
+	configPath = "configs/"
+	logPath    = "logs/"
+	outPath    = "out/"
 )
 
 // ProdService defines binary will be running in prod
 type ProdService struct {
 	ConfigPath string
-	DbPort     string
 	Bin        string
 	ListenPort string
+	Databases  map[string]*Database
 }
 
 type Service struct {
 	ConfigPaths  []string
 	Runs         string
-	DbPort       string
 	ListenPorts  []string
 	OutputPath   string
 	DumpDbPath   string
 	LogPath      string
 	ProdServices []ProdService
+	Databases    map[string]*Database
 
 	ReqPorts []string
 }
 
-func Init(curRun int, listenPorts []string, dbPort string, prodServices []ProdService, reqPorts []string) (Service, error) {
+func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, database map[string]*Database) (Service, error) {
 	service := Service{
 		Runs:         fmt.Sprintf("%d", curRun),
-		DbPort:       dbPort,
 		ListenPorts:  listenPorts,
 		LogPath:      fmt.Sprintf("%slog%d", logPath, curRun),
 		OutputPath:   fmt.Sprintf("%sresp%d", outPath, curRun),
 		DumpDbPath:   fmt.Sprintf("%sdb%d.sql", outPath, curRun),
 		ProdServices: prodServices,
+		Databases:    database,
 
 		ReqPorts: reqPorts,
 	}
@@ -86,13 +85,14 @@ func (s Service) writeOutput(output, outPath string) error {
 	return nil
 }
 
+// generateConfig creates a config file for each run with snapshot database url
 func (s Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
 	configByte, err := os.ReadFile(prodService.ConfigPath)
 	if err != nil {
 		return err
 	}
-	configStr := strings.ReplaceAll(string(configByte), prodService.DbPort, s.DbPort)
-	configStr = strings.ReplaceAll(configStr, prodService.ListenPort, listenPort)
+
+	configStr := strings.ReplaceAll(string(configByte), prodService.ListenPort, listenPort)
 
 	file, err := os.Create(configPath)
 	if err != nil {
@@ -178,7 +178,7 @@ func (s Service) Run(r ListOfReqs) {
 	go s.stop(cmdCh, len(s.ProdServices))
 	wg.Wait()
 
-	err := dumpDb(s.DbPort, s.DumpDbPath)
+	err := dumpDb(s.DumpDbPath)
 	if err != nil {
 		log.Fatalf("Failed to dump db: %v", err)
 	}
