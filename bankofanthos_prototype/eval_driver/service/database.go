@@ -70,14 +70,11 @@ func dbExists(name string, prodDb *Database) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed check database exist, %w", err)
 	}
-	if strings.Contains(string(out), name) {
-		return true, nil
-	} else {
-		return false, nil
-	}
+	exists := strings.Contains(string(out), name)
+	return exists, nil
 }
 
-// RestoreSnapshot creates a separate snapshot db, and restore the prod db to snapshot db
+// RestoreSnapshot creates a separate snapshot db if not exist, and restore prod db to snapshot db
 func RestoreSnapshot(snapshotPath string, prodDb *Database) (*Database, error) {
 	dbName := utility.GetSnapshotDbNameByProd(prodDb.Name)
 	exists, err := dbExists(dbName, prodDb)

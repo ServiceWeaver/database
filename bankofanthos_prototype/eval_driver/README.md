@@ -14,7 +14,7 @@ Then running the program
 go run .
 ```
 
-## Connect to DB for develop
+## Connect to DB for developer
 Note: DB port may be changed.
 ```shell
 psql -h localhost -p 5432 -U postgres  # password: password
