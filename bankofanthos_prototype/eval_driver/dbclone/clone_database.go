@@ -20,6 +20,7 @@ import (
 type Brancher struct {
 	db            *pgxpool.Pool
 	currentBranch *Branch
+	branches      map[string]*Branch
 }
 
 type Branch struct {
@@ -29,7 +30,8 @@ type Branch struct {
 }
 
 func NewBrancher(db *pgxpool.Pool) *Brancher {
-	return &Brancher{db, nil}
+	branches := map[string]*Branch{}
+	return &Brancher{db, nil, branches}
 }
 
 func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error) {
@@ -55,6 +57,7 @@ func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error
 
 	branch := &Branch{clonedDdl: cloneDdl, namespace: namespace, commited: false}
 	b.currentBranch = branch
+	b.branches[namespace] = branch
 	return branch, nil
 }
 

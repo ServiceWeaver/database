@@ -162,7 +162,6 @@ func main() {
 	}
 
 	ctx := context.Background()
-	branchPerTrail := map[string]map[string]*dbclone.Branch{} // {namespace1:{dbname1:Branch,dbname2:Branch},namespace2...}
 	runCnt := 0
 
 	// generate traffic patterns
@@ -196,7 +195,6 @@ func main() {
 			}
 		}()
 	}
-	branchPerTrail["B"] = baselineBranches
 
 	runCnt += 1
 
@@ -214,8 +212,6 @@ func main() {
 			}
 		}()
 	}
-
-	branchPerTrail["BTWO"] = baseline2Branches
 
 	if err := diff.GetNonDeterministic(baselineService, baselineService2); err != nil {
 		log.Fatalf("Get non deterministic error failed: %v", err)
@@ -237,7 +233,6 @@ func main() {
 			}
 		}()
 	}
-	branchPerTrail["E"] = experientalServiceBranches
 
 	eq1, err := diff.OutputEq(baselineService.OutputPath, experientalService.OutputPath, responseType)
 	if err != nil {
@@ -267,7 +262,6 @@ func main() {
 			}
 		}()
 	}
-	branchPerTrail["BE"] = b1E1ServiceBranches
 
 	eq1, err = diff.OutputEq(baselineService.OutputPath, b1E1Service.OutputPath, responseType)
 	if err != nil {
@@ -298,7 +292,6 @@ func main() {
 			}
 		}()
 	}
-	branchPerTrail["EB"] = e1B1ServiceBranches
 
 	eq1, err = diff.OutputEq(baselineService.OutputPath, e1B1Service.OutputPath, responseType)
 	if err != nil {
