@@ -13,6 +13,7 @@ import (
 	"bankofanthos_prototype/eval_driver/service"
 
 	"github.com/gookit/color"
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 var (
@@ -89,6 +90,30 @@ func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
 	return &service.Database{Name: databaseUrl[posS+1 : posE], Url: databaseUrl}, nil
 }
 
+func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclone.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string) (map[string]*dbclone.Branch, *service.Service, error) {
+	branchMap := map[string]*dbclone.Branch{}
+	for name, brancher := range branchers {
+		b, err := brancher.Branch(ctx, namespace)
+		if err != nil {
+			return nil, nil, fmt.Errorf("branch %s failed: %v", namespace, err)
+		}
+		defer func() {
+			err = b.Commit(ctx)
+			if err != nil {
+				log.Fatalf("Commit %s failed: %v", namespace, err)
+			}
+		}()
+
+		branchMap[name] = b
+	}
+	trail, err := service.Init(runCnt, listenPorts, prodServices, reqPorts)
+	if err != nil {
+		log.Fatalf("Init service failed: %v", err)
+	}
+	trail.Run(service.ListOfReqs1)
+	return branchMap, trail, nil
+}
+
 func main() {
 	// parse flags
 	var origListenPort, expListenPort, baseListenPort, dbUrls string
@@ -129,18 +154,15 @@ func main() {
 		ConfigPath: v1Config,
 		ListenPort: origListenPort,
 		Bin:        v1Bin,
-		Databases:  prodDbs,
 	}
 	experimentalProdService := service.ProdService{
 		ConfigPath: v2Config,
 		ListenPort: origListenPort,
 		Bin:        v2Bin,
-		Databases:  prodDbs,
 	}
 
 	ctx := context.Background()
-
-	var allClonedDbs []*dbclone.ClonedDb
+	branchPerTrail := map[string]map[string]*dbclone.Branch{} // {namespace1:{dbname1:Branch,dbname2:Branch},namespace2...}
 	runCnt := 0
 
 	// generate traffic patterns
@@ -149,72 +171,73 @@ func main() {
 		log.Fatalf("Failed to generate traffic patterns: %v", err)
 	}
 
-	// run baseline service
-	var clonedDBBs []*dbclone.ClonedDb
+	branchers := map[string]*dbclone.Brancher{}
 	for _, prodDb := range prodDbs {
-		db, err := service.CloneDB(ctx, prodDb, "B")
+		db, err := pgxpool.Connect(ctx, prodDb.Url)
 		if err != nil {
-			log.Fatalf("Cloned DB %s failed: %v", prodDb.Name, err)
+			log.Fatalf("Connect to DB %s failed with %s: %v", prodDb.Name, prodDb.Url, err)
 		}
-		clonedDBBs = append(clonedDBBs, db)
+		defer db.Close()
+		brancher := dbclone.NewBrancher(db)
+		branchers[prodDb.Name] = brancher
 	}
 
-	baselineService, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], prodDbs)
+	baselineBranches, baselineService, err := runTrail(ctx, "B", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
 	if err != nil {
-		log.Fatalf("Init service failed: %v", err)
+		log.Fatalf("trail run failed: %v", err)
 	}
-	baselineService.Run(service.ListOfReqs1)
-	allClonedDbs = append(allClonedDbs, clonedDBBs...)
-	for _, db := range clonedDBBs {
-		if err = db.Reset(ctx); err != nil {
-			log.Fatalf("Reset cloned database failed: %v", err)
-		}
+	for _, branch := range baselineBranches {
+		defer func() {
+			if dropClonedTables {
+				err = branch.Delete(ctx)
+				if err != nil {
+					log.Fatalf("Delete failed: %v", err)
+				}
+			}
+		}()
 	}
-
-	// run baseline service2
-	var clonedDBBTwos []*dbclone.ClonedDb
-	for _, prodDb := range prodDbs {
-		db, err := service.CloneDB(ctx, prodDb, "BTWO")
-		if err != nil {
-			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
-		}
-		clonedDBBTwos = append(clonedDBBTwos, db)
-	}
+	branchPerTrail["B"] = baselineBranches
 
 	runCnt += 1
-	baselineService2, err := service.Init(runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], prodDbs)
+
+	baseline2Branches, baselineService2, err := runTrail(ctx, "BTWO", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
 	if err != nil {
-		log.Fatalf("Init service failed: %v", err)
+		log.Fatalf("trail run failed: %v", err)
 	}
-	baselineService2.Run(service.ListOfReqs1)
+	for _, branch := range baseline2Branches {
+		defer func() {
+			if dropClonedTables {
+				err = branch.Delete(ctx)
+				if err != nil {
+					log.Fatalf("Delete failed: %v", err)
+				}
+			}
+		}()
+	}
+
+	branchPerTrail["BTWO"] = baseline2Branches
 
 	if err := diff.GetNonDeterministic(baselineService, baselineService2); err != nil {
 		log.Fatalf("Get non deterministic error failed: %v", err)
 	}
 
-	allClonedDbs = append(allClonedDbs, clonedDBBTwos...)
-	for _, db := range clonedDBBTwos {
-		if err = db.Reset(ctx); err != nil {
-			log.Fatalf("Reset cloned database failed: %v", err)
-		}
-	}
-
 	// run experimental service
-	var clonedDBEs []*dbclone.ClonedDb
-	for _, prodDb := range prodDbs {
-		db, err := service.CloneDB(ctx, prodDb, "E")
-		if err != nil {
-			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
-		}
-		clonedDBEs = append(clonedDBEs, db)
-	}
-
 	runCnt += 1
-	experientalService, err := service.Init(runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt], prodDbs)
+	experientalServiceBranches, experientalService, err := runTrail(ctx, "E", branchers, runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt])
 	if err != nil {
-		log.Fatalf("Init service failed: %v", err)
+		log.Fatalf("trail run failed: %v", err)
 	}
-	experientalService.Run(service.ListOfReqs1)
+	for _, branch := range experientalServiceBranches {
+		defer func() {
+			if dropClonedTables {
+				err = branch.Delete(ctx)
+				if err != nil {
+					log.Fatalf("Delete failed: %v", err)
+				}
+			}
+		}()
+	}
+	branchPerTrail["E"] = experientalServiceBranches
 
 	eq1, err := diff.OutputEq(baselineService.OutputPath, experientalService.OutputPath, responseType)
 	if err != nil {
@@ -227,30 +250,24 @@ func main() {
 	if eq1 && eq2 {
 		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, experientalService.Runs)
 	}
-	allClonedDbs = append(allClonedDbs, clonedDBEs...)
-	for _, db := range clonedDBEs {
-		if err = db.Reset(ctx); err != nil {
-			log.Fatalf("Reset cloned database failed: %v", err)
-		}
-	}
 
 	// run requests on both baseline and experiental
-	var clonedDBBEs []*dbclone.ClonedDb
-	for _, prodDb := range prodDbs {
-		db, err := service.CloneDB(ctx, prodDb, "BE")
-		if err != nil {
-			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
-		}
-
-		clonedDBBEs = append(clonedDBBEs, db)
-	}
-
 	runCnt += 1
-	b1E1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], prodDbs)
+	b1E1ServiceBranches, b1E1Service, err := runTrail(ctx, "BE", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
 	if err != nil {
-		log.Fatalf("Init B1E1 service failed: %v", err)
+		log.Fatalf("trail run failed: %v", err)
 	}
-	b1E1Service.Run(service.ListOfReqs1)
+	for _, branch := range b1E1ServiceBranches {
+		defer func() {
+			if dropClonedTables {
+				err = branch.Delete(ctx)
+				if err != nil {
+					log.Fatalf("Delete failed: %v", err)
+				}
+			}
+		}()
+	}
+	branchPerTrail["BE"] = b1E1ServiceBranches
 
 	eq1, err = diff.OutputEq(baselineService.OutputPath, b1E1Service.OutputPath, responseType)
 	if err != nil {
@@ -265,30 +282,23 @@ func main() {
 		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, b1E1Service.Runs)
 	}
 
-	allClonedDbs = append(allClonedDbs, clonedDBBEs...)
-	for _, db := range clonedDBBEs {
-		if err = db.Reset(ctx); err != nil {
-			log.Fatalf("Reset cloned database failed: %v", err)
-		}
-	}
-
 	// run requests on both experiental and baseline
-	var clonedDBEBs []*dbclone.ClonedDb
-	for _, prodDb := range prodDbs {
-		db, err := service.CloneDB(ctx, prodDb, "EB")
-		if err != nil {
-			log.Fatalf("Cloned prodDb %s failed: %v", prodDb.Name, err)
-		}
-		clonedDBEBs = append(clonedDBEBs, db)
-	}
-
 	runCnt += 1
-
-	e1B1Service, err := service.Init(runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], prodDbs)
+	e1B1ServiceBranches, e1B1Service, err := runTrail(ctx, "EB", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
 	if err != nil {
-		log.Fatalf("Init B1E1 service failed: %v", err)
+		log.Fatalf("trail run failed: %v", err)
 	}
-	e1B1Service.Run(service.ListOfReqs1)
+	for _, branch := range e1B1ServiceBranches {
+		defer func() {
+			if dropClonedTables {
+				err = branch.Delete(ctx)
+				if err != nil {
+					log.Fatalf("Delete failed: %v", err)
+				}
+			}
+		}()
+	}
+	branchPerTrail["EB"] = e1B1ServiceBranches
 
 	eq1, err = diff.OutputEq(baselineService.OutputPath, e1B1Service.OutputPath, responseType)
 	if err != nil {
@@ -300,21 +310,6 @@ func main() {
 	}
 	if eq1 && eq2 {
 		color.Greenf("run %s and run %s is equal.\n", baselineService.Runs, e1B1Service.Runs)
-	}
-
-	allClonedDbs = append(allClonedDbs, clonedDBEBs...)
-	for _, db := range clonedDBEBs {
-		if err = db.Reset(ctx); err != nil {
-			log.Fatalf("Reset cloned database failed: %v", err)
-		}
-	}
-
-	if dropClonedTables {
-		for _, cloned := range allClonedDbs {
-			if err = cloned.Close(ctx); err != nil {
-				log.Fatalf("Close cloned database failed: %v", err)
-			}
-		}
 	}
 
 	fmt.Println("Exiting program...")

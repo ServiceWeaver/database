@@ -69,24 +69,7 @@ func (c *cloneDdl) reset(ctx context.Context) error {
 }
 
 func (c *cloneDdl) close(ctx context.Context) error {
-	// drop all tables, rename the snapshot back
-	for _, table := range c.clonedTables {
-		err := dropView(ctx, c.database.connPool, table.View.Name)
-		if err != nil {
-			return err
-		}
-
-		err = dropTable(ctx, c.database.connPool, table.Plus.Name)
-		if err != nil {
-			return err
-		}
-		err = dropTable(ctx, c.database.connPool, table.Minus.Name)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return dropSchemaCascade(ctx, c.database.connPool, c.namespace)
 }
 
 func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clonedTable, error) {

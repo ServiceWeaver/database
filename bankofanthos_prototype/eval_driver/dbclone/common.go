@@ -44,3 +44,10 @@ func dropView(ctx context.Context, connPool *pgxpool.Pool, name string) error {
 	_, err := connPool.Exec(ctx, query)
 	return err
 }
+
+func dropSchemaCascade(ctx context.Context, connPool *pgxpool.Pool, namespace string) error {
+	query := fmt.Sprintf("DROP SCHEMA %s CASCADE;", namespace)
+
+	_, err := connPool.Exec(ctx, query)
+	return err
+}

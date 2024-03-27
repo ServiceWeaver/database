@@ -1,9 +1,7 @@
 package service
 
 import (
-	"bankofanthos_prototype/eval_driver/dbclone"
 	"bankofanthos_prototype/eval_driver/utility"
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -98,10 +96,6 @@ func RestoreSnapshot(snapshotPath string, prodDb *Database) (*Database, error) {
 		return nil, fmt.Errorf("failed to restore snapshot, %w", err)
 	}
 	return snapshot, nil
-}
-
-func CloneDB(ctx context.Context, snapshot *Database, namespace string) (*dbclone.ClonedDb, error) {
-	return dbclone.Clone(ctx, snapshot.Url, namespace)
 }
 
 func CloseSnapshotDB(prod *Database, snapshotName string) error {
