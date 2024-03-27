@@ -133,6 +133,10 @@ func (d *dbDiff) unionViews(ctx context.Context, viewA *view, viewB *view, viewN
 	return d.combine(ctx, viewName, viewA.Name, viewA.Cols, "UNION ALL", viewB.Name, viewB.Cols)
 }
 
+func (d *dbDiff) unionUniqueViews(ctx context.Context, viewA *view, viewB *view, viewName string) (*view, error) {
+	return d.combine(ctx, viewName, viewA.Name, viewA.Cols, "UNION", viewB.Name, viewB.Cols)
+}
+
 func (d *dbDiff) minusTables(ctx context.Context, tableA *table, tableB *table, tableName string) (*view, error) {
 	return d.combine(ctx, tableName, tableA.Name, tableA.Cols, "EXCEPT ALL", tableB.Name, tableB.Cols)
 }
@@ -384,9 +388,9 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	return diff, nil
 }
 
-// left: A+, B- - A-
-// middle: A- intersect B-, A- - B-, B- - A-
-// right: B+, A- - B-
+// left: A+ UNION ALL B- - A-
+// middle: A- UNION B-
+// right: B+ UNION ALL A- - B-
 // left we will show inserted in A, and deleted only from B
 // middle we will show distinct deleted from both A and B
 // right we will show inserted in B, and deleted only from A
@@ -464,12 +468,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, rightSideView, rightSideDiff)
 
-	// Middle: A- intersect B-, A- - B-, B- - A-
-	halfMiddleSideView, err := d.unionViews(ctx, aMinusIntersectBMinus, aMinusBMinus, "halfMiddle")
-	if err != nil {
-		return nil, err
-	}
-	middleSideView, err := d.unionViews(ctx, halfMiddleSideView, bMinusAMinus, "middleView")
+	middleSideView, err := d.unionUniqueViews(ctx, aMinus, bMinus, "middleView")
 	if err != nil {
 		return nil, err
 	}
@@ -481,7 +480,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	if err != nil {
 		return nil, err
 	}
-	views = append(views, halfMiddleSideView, middleSideView, middleSideDiff)
+	views = append(views, middleSideView, middleSideDiff)
 
 	rowDiff := &Diff{Left: leftSideRows, Right: rightSideRows, Middle: middleSideRows, ColNames: colNames}
 

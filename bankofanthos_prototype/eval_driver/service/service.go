@@ -26,7 +26,6 @@ type ProdService struct {
 	ConfigPath string
 	Bin        string
 	ListenPort string
-	Databases  map[string]*Database
 }
 
 type Service struct {
@@ -37,20 +36,18 @@ type Service struct {
 	DumpDbPath   string
 	LogPath      string
 	ProdServices []ProdService
-	Databases    map[string]*Database
 
 	ReqPorts []string
 }
 
-func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, database map[string]*Database) (Service, error) {
-	service := Service{
+func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string) (*Service, error) {
+	service := &Service{
 		Runs:         fmt.Sprintf("%d", curRun),
 		ListenPorts:  listenPorts,
 		LogPath:      fmt.Sprintf("%slog%d", logPath, curRun),
 		OutputPath:   fmt.Sprintf("%sresp%d", outPath, curRun),
 		DumpDbPath:   fmt.Sprintf("%sdb%d.sql", outPath, curRun),
 		ProdServices: prodServices,
-		Databases:    database,
 
 		ReqPorts: reqPorts,
 	}
