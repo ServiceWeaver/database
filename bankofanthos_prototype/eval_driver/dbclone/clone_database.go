@@ -26,7 +26,7 @@ type Brancher struct {
 type Branch struct {
 	clonedDdl *cloneDdl
 	namespace string
-	commited  bool
+	committed bool
 }
 
 func NewBrancher(db *pgxpool.Pool) *Brancher {
@@ -35,8 +35,11 @@ func NewBrancher(db *pgxpool.Pool) *Brancher {
 }
 
 func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error) {
-	if b.currentBranch != nil && !b.currentBranch.commited {
+	if b.currentBranch != nil && !b.currentBranch.committed {
 		return nil, fmt.Errorf("branch %s is still pending, please commit first", b.currentBranch.namespace)
+	}
+	if _, ok := b.branches[namespace]; ok {
+		return nil, fmt.Errorf("branch %s already exists", namespace)
 	}
 	database, err := newDatabase(ctx, b.db)
 	if err != nil {
@@ -55,19 +58,19 @@ func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error
 		}
 	}
 
-	branch := &Branch{clonedDdl: cloneDdl, namespace: namespace, commited: false}
+	branch := &Branch{clonedDdl: cloneDdl, namespace: namespace, committed: false}
 	b.currentBranch = branch
 	b.branches[namespace] = branch
 	return branch, nil
 }
 
 func (b *Branch) Delete(ctx context.Context) error {
-	if !b.commited {
-		fmt.Println("WARNING: this branch haven't commited yet. Droping all tables now...")
+	if !b.committed {
+		fmt.Println("WARNING: this branch hasn't committed yet. Dropping all tables now...")
 		if err := b.clonedDdl.reset(ctx); err != nil {
 			return err
 		}
-		b.commited = true
+		b.committed = true
 	}
 	if err := b.clonedDdl.close(ctx); err != nil {
 		return err
@@ -79,7 +82,7 @@ func (b *Branch) Commit(ctx context.Context) error {
 	if err := b.clonedDdl.reset(ctx); err != nil {
 		return err
 	}
-	b.commited = true
+	b.committed = true
 	return nil
 }
 
