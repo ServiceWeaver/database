@@ -4,19 +4,15 @@ import (
 	"bankofanthos_prototype/eval_driver/dbclone"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 )
 
 type Code string
 
 const (
-	Reset Code = "\x1b[0m" // The ANSI escape code that resets formatting.
-	Bold  Code = "\x1b[1m" // The ANSI escape code for bold text.
-
-	Red   Code = "\x1b[31m"
-	Green Code = "\x1b[32m"
-	Blue  Code = "\x1b[34m"
+	Reset Code = "\x1b[0m"        // The ANSI escape code that resets formatting.
+	Bold  Code = "\x1b[1m"        // The ANSI escape code for bold text.
+	Dim   Code = "\x1b[38;5;245m" // light grey
 )
 
 type atom struct {
@@ -26,7 +22,6 @@ type atom struct {
 }
 
 type text struct {
-	Color  string
 	Row    []atom
 	Prefix string
 }
@@ -78,6 +73,9 @@ func colorBold(rows ...[]atom) error {
 			if !s[m].Equal(baseValue) {
 				s[m].Bold = true
 				rows[0][m].Bold = true
+
+				s[m].Color = ""
+				rows[0][m].Color = ""
 			}
 		}
 	}
@@ -95,32 +93,6 @@ func colorRow(baseline *text, control *text, experimental *text) error {
 	}
 	if len(experimental.Row) != 0 {
 		colorBoldRows = append(colorBoldRows, experimental.Row)
-	}
-
-	// if baseline is empty
-	if len(baseline.Row) == 0 && len(control.Row) > 0 {
-		control.Color = string(Green)
-	}
-	if len(baseline.Row) == 0 && len(experimental.Row) > 0 {
-		experimental.Color = string(Green)
-	}
-	// if baseline has values while compared row is deleted
-	if len(baseline.Row) > 0 && len(control.Row) == 0 {
-		control.Color = string(Red)
-	}
-	if len(baseline.Row) > 0 && len(experimental.Row) == 0 {
-		experimental.Color = string(Red)
-	}
-	// if value is updated
-	if len(baseline.Row) > 0 && len(control.Row) > 0 && !slices.EqualFunc(baseline.Row, control.Row, func(s1, s2 atom) bool {
-		return s1.S == s2.S
-	}) {
-		control.Color = string(Blue)
-	}
-	if len(baseline.Row) > 0 && len(experimental.Row) > 0 && !slices.EqualFunc(baseline.Row, experimental.Row, func(s1, s2 atom) bool {
-		return s1.S == s2.S
-	}) {
-		experimental.Color = string(Blue)
 	}
 
 	baseline.Prefix = baselinePrefix

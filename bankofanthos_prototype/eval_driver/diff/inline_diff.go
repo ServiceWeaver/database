@@ -98,12 +98,11 @@ func (i *inlineFormatter) format() error {
 		texts := []text{i.baseline[r], i.control[r], i.experimental[r]}
 		for _, text := range texts {
 			writeRow("│", "│", "│", func(j, w int) string {
-				a := atom{Color: Code(text.Color)}
+				a := atom{}
 				if j == 0 {
 					a.S = text.Prefix
 				} else if len(text.Row) > 0 {
 					a = text.Row[j-1]
-					a.Color = Code(text.Color)
 				}
 				return fmt.Sprintf(" %-*s ", w-len(a.S)+a.len(), a)
 			})
@@ -128,7 +127,7 @@ func (i *inlineFormatter) parseCol(oneWay [][]string) []text {
 	for r := 0; r < len(oneWay); r++ {
 		var row []atom
 		for c := 0; c < len(oneWay[r]); c++ {
-			a := atom{S: oneWay[r][c]}
+			a := atom{S: oneWay[r][c], Color: Dim}
 			i.widths[c+1] = max(len(a.S), i.widths[c+1])
 			row = append(row, a)
 		}

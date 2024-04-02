@@ -34,7 +34,7 @@ func (s *sideBySideDiffFormatter) parseCol(oneWay [][]string) []text {
 	for r := 0; r < len(oneWay); r++ {
 		var row []atom
 		for c := 0; c < len(oneWay[r]); c++ {
-			a := atom{S: oneWay[r][c]}
+			a := atom{S: oneWay[r][c], Color: Dim}
 			s.widths[c] = max(len(a.S), s.widths[c])
 			row = append(row, a)
 		}
@@ -87,10 +87,9 @@ func (s *sideBySideDiffFormatter) format() error {
 				end = "\n"
 			}
 			writeRow(end, func(j, w int) string {
-				a := atom{Color: Code(text.Color)}
+				a := atom{}
 				if len(text.Row) > 0 {
 					a = text.Row[j]
-					a.Color = Code(text.Color)
 				}
 				return fmt.Sprintf(" %-*s ", w-len(a.S)+a.len(), a)
 			})
