@@ -394,27 +394,27 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		expectedRowDiffs := &Diff{
 			Left: []*Row{
 				{[]any{int32(2), "B"}}, // A+
-				{nil, nil},             // B+
+				{[]any{nil, nil}},      // B+
 				{[]any{int32(3), "C"}}, //A+B+
-				{nil, nil},             // A-
+				{[]any{nil, nil}},      // A-
 				{[]any{int32(1), "A"}}, //B-
-				{nil, nil},             // A-B-
+				{[]any{nil, nil}},      // A-B-
 			},
 			Middle: []*Row{
-				{nil, nil},             // A+
-				{nil, nil},             // B+
-				{nil, nil},             //A+B+
+				{[]any{nil, nil}},      // A+
+				{[]any{nil, nil}},      // B+
+				{[]any{nil, nil}},      //A+B+
 				{[]any{int32(4), "D"}}, // A-
 				{[]any{int32(1), "A"}}, //B-
 				{[]any{int32(0), "O"}}, // A-B-
 			},
 			Right: []*Row{
-				{nil, nil},             // A+
+				{[]any{nil, nil}},      // A+
 				{[]any{int32(1), "D"}}, // B+
 				{[]any{int32(3), "C"}}, //A+B+
 				{[]any{int32(4), "D"}}, // A-
-				{nil, nil},             //B-
-				{nil, nil},             // A-B-
+				{[]any{nil, nil}},      //B-
+				{[]any{nil, nil}},      // A-B-
 			},
 			ColNames: []string{"id", "name"},
 		}

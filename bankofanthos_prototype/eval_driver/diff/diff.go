@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	fromFile              = "baseline"
-	toFile                = "comparison"
+	fromFile              = "control"
+	toFile                = "experimental"
 	nonDeterministicField = "nondeterministic/"
 	databaseType          = "database"
 	responseType          = "response"

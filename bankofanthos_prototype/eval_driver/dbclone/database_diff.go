@@ -229,10 +229,9 @@ func (d *dbDiff) getRowsByPrimaryKey(ctx context.Context, primaryKeyView *view, 
 }
 
 func (d *dbDiff) fillRowSlices(val []any, length int) []*Row {
-	row := Row(val)
 	slice := make([]*Row, length)
 	for i := range slice {
-		slice[i] = &row
+		slice[i] = (&Row{val})
 	}
 	return slice
 }

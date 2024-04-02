@@ -3,8 +3,11 @@ package dbclone
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sort"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"golang.org/x/exp/maps"
 )
 
 // Examples:
@@ -86,7 +89,26 @@ func (b *Branch) Commit(ctx context.Context) error {
 	return nil
 }
 
-func ComputeDiff(ctx context.Context, A *Branch, B *Branch) (map[string]*Diff, error) {
-	// For each two clonedDb, compare each table and get rowDiffs for each table
-	return nil, nil
+// For each two branch, compare each table and get rowDiffs for each table
+func (b *Brancher) ComputeDiff(ctx context.Context, A *Branch, B *Branch) (map[string]*Diff, error) {
+	aTables := maps.Keys(A.clonedDdl.clonedTables)
+	bTables := maps.Keys(B.clonedDdl.clonedTables)
+	sort.Strings(aTables)
+	sort.Strings(bTables)
+	if !slices.Equal(aTables, bTables) {
+		return nil, fmt.Errorf("two branches have different tables %s and %s, cannot compare.", maps.Keys(A.clonedDdl.clonedTables), maps.Keys(B.clonedDdl.clonedTables))
+	}
+
+	dbDiff := newDbDiff(b.db)
+	diffs := map[string]*Diff{}
+	for tableName, clonedTableA := range A.clonedDdl.clonedTables {
+		clonedTableB := B.clonedDdl.clonedTables[tableName]
+		diff, err := dbDiff.getClonedTableRowDiff(ctx, clonedTableA, clonedTableB)
+		if err != nil {
+			return nil, err
+		}
+		diffs[tableName] = diff
+	}
+
+	return diffs, nil
 }
