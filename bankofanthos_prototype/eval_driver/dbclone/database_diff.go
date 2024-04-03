@@ -78,8 +78,8 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 			return nil, nil, err
 		}
 
-		row := &Row{rowVal}
-		dumpRows = append(dumpRows, row)
+		row := Row(rowVal)
+		dumpRows = append(dumpRows, &row)
 	}
 
 	return dumpRows, colNames, rows.Err()
