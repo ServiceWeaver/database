@@ -30,7 +30,7 @@ func newInlineFormatter(w io.Writer, tableDiff *dbclone.Diff, tableName string) 
 		tableDiff: tableDiff,
 		tableName: tableName,
 		width:     0,
-		widths:    make([]int, len(tableDiff.ColNames)+1), // first length will be 3way inline prefix, table columns are followed
+		widths:    make([]int, len(tableDiff.ColNames)+1), // +1 for extra "Prefix" column
 		w:         w,
 	}
 }
@@ -92,10 +92,7 @@ func (i *inlineFormatter) format() error {
 	// for each row
 	prefix := []string{baselinePrefix, controlPrefix, experimentalPrefix}
 	for r := 0; r < len(i.baseline); r++ {
-		err := boldUnequalColumns(i.baseline[r], i.control[r], i.experimental[r])
-		if err != nil {
-			return err
-		}
+		boldUnequalColumns(i.baseline[r], i.control[r], i.experimental[r])
 
 		texts := [][]atom{i.baseline[r], i.control[r], i.experimental[r]}
 		for p, text := range texts {

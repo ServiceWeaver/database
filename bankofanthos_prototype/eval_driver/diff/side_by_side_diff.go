@@ -66,10 +66,8 @@ func (s *sideBySideDiffFormatter) format() error {
 
 	// for each row
 	for r := 0; r < len(s.baseline); r++ {
-		err := boldUnequalColumns(s.baseline[r], s.control[r], s.experimental[r])
-		if err != nil {
-			return err
-		}
+		boldUnequalColumns(s.baseline[r], s.control[r], s.experimental[r])
+
 		texts := [][]atom{s.control[r], s.baseline[r], s.experimental[r]}
 		for i, text := range texts {
 			end := "|"

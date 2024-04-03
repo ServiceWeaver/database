@@ -31,45 +31,29 @@ func (a atom) String() string {
 	return b.String()
 }
 
-func boldUnequalColumns(baseline []atom, control []atom, experimental []atom) error {
-	boldCol := func(a1 *atom, a2 *atom) {
-		a1.Bold = true
-		a1.Color = Reset
-
-		a2.Bold = true
-		a2.Color = Reset
-	}
-
-	var colorBoldRows [][]atom
-	if len(baseline) != 0 {
-		colorBoldRows = append(colorBoldRows, baseline)
-	}
-	if len(control) != 0 {
-		colorBoldRows = append(colorBoldRows, control)
-	}
-	if len(experimental) != 0 {
-		colorBoldRows = append(colorBoldRows, experimental)
-	}
-
-	if len(colorBoldRows) < 2 {
-		return nil
-	}
-
-	for m := 0; m < len(colorBoldRows[0]); m++ {
-		if colorBoldRows[0][m] != colorBoldRows[1][m] {
-			boldCol(&colorBoldRows[0][m], &colorBoldRows[1][m])
-		}
-		if len(colorBoldRows) > 2 {
-			if colorBoldRows[0][m] != colorBoldRows[2][m] {
-				boldCol(&colorBoldRows[0][m], &colorBoldRows[2][m])
-			}
-			if colorBoldRows[1][m] != colorBoldRows[2][m] {
-				boldCol(&colorBoldRows[1][m], &colorBoldRows[2][m])
-			}
+func boldUnequalColumns(baseline, control, experimental []atom) {
+	var rows [][]atom
+	for _, row := range [][]atom{baseline, control, experimental} {
+		if len(row) > 0 {
+			rows = append(rows, row)
 		}
 	}
 
-	return nil
+	for col := range rows[0] {
+		allEqual := true
+		for _, row := range rows {
+			if row[col] != rows[0][col] {
+				allEqual = false
+				break
+			}
+		}
+		if !allEqual {
+			for _, row := range rows {
+				row[col].Bold = true
+				row[col].Color = Reset
+			}
+		}
+	}
 }
 
 func stringifyRow(row *dbclone.Row) ([]string, error) {
