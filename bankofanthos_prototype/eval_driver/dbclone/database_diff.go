@@ -78,8 +78,8 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 			return nil, nil, err
 		}
 
-		row := &Row{rowVal}
-		dumpRows = append(dumpRows, row)
+		row := Row(rowVal)
+		dumpRows = append(dumpRows, &row)
 	}
 
 	return dumpRows, colNames, rows.Err()
@@ -229,9 +229,10 @@ func (d *dbDiff) getRowsByPrimaryKey(ctx context.Context, primaryKeyView *view, 
 }
 
 func (d *dbDiff) fillRowSlices(val []any, length int) []*Row {
+	row := Row(val)
 	slice := make([]*Row, length)
 	for i := range slice {
-		slice[i] = (&Row{val})
+		slice[i] = &row
 	}
 	return slice
 }

@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-var (
+const (
 	baselinePrefix     = "="
 	controlPrefix      = "<"
 	experimentalPrefix = ">"
@@ -19,9 +19,9 @@ type inlineFormatter struct {
 
 	width        int
 	widths       []int
-	baseline     []text
-	control      []text
-	experimental []text
+	baseline     [][]atom
+	control      [][]atom
+	experimental [][]atom
 	w            io.Writer
 }
 
@@ -30,7 +30,7 @@ func newInlineFormatter(w io.Writer, tableDiff *dbclone.Diff, tableName string) 
 		tableDiff: tableDiff,
 		tableName: tableName,
 		width:     0,
-		widths:    make([]int, len(tableDiff.ColNames)+1),
+		widths:    make([]int, len(tableDiff.ColNames)+1), // first length will be 3way inline prefix, table columns are followed
 		w:         w,
 	}
 }
@@ -60,7 +60,7 @@ func (i *inlineFormatter) format() error {
 		fmt.Fprintln(i.w, r)
 	}
 
-	writeRow("╭", "-", "╮", func(j, w int) string {
+	writeRow("╭", "─", "╮", func(j, w int) string {
 		return strings.Repeat("─", w+2)
 	})
 
@@ -90,21 +90,24 @@ func (i *inlineFormatter) format() error {
 	})
 
 	// for each row
+	prefix := []string{baselinePrefix, controlPrefix, experimentalPrefix}
 	for r := 0; r < len(i.baseline); r++ {
-		err := colorRow(&i.baseline[r], &i.control[r], &i.experimental[r])
+		err := boldUnequalColumns(i.baseline[r], i.control[r], i.experimental[r])
 		if err != nil {
 			return err
 		}
-		texts := []text{i.baseline[r], i.control[r], i.experimental[r]}
-		for _, text := range texts {
+
+		texts := [][]atom{i.baseline[r], i.control[r], i.experimental[r]}
+		for p, text := range texts {
 			writeRow("│", "│", "│", func(j, w int) string {
 				a := atom{}
 				if j == 0 {
-					a.S = text.Prefix
-				} else if len(text.Row) > 0 {
-					a = text.Row[j-1]
+					a.S = prefix[p]
+				} else if len(text) > 0 {
+					a = text[j-1]
 				}
-				return fmt.Sprintf(" %-*s ", w-len(a.S)+a.len(), a)
+				s := a.String()
+				return fmt.Sprintf(" %-*s ", w-len(a.S)+len(s), a)
 			})
 		}
 
@@ -122,30 +125,30 @@ func (i *inlineFormatter) format() error {
 	return nil
 }
 
-func (i *inlineFormatter) parseCol(oneWay [][]string) []text {
-	var rows []text
-	for r := 0; r < len(oneWay); r++ {
+func (i *inlineFormatter) parseRows(rows [][]string) [][]atom {
+	var textRows [][]atom
+	for r := 0; r < len(rows); r++ {
 		var row []atom
-		for c := 0; c < len(oneWay[r]); c++ {
-			a := atom{S: oneWay[r][c], Color: Dim}
+		for c := 0; c < len(rows[r]); c++ {
+			a := atom{S: rows[r][c], Color: Dim}
 			i.widths[c+1] = max(len(a.S), i.widths[c+1])
 			row = append(row, a)
 		}
-		rows = append(rows, text{Row: row})
+		textRows = append(textRows, row)
 	}
-	return rows
+	return textRows
 }
 
 func (i *inlineFormatter) parseDiff() error {
-	baseline, control, experimental, err := getRowVals(i.tableDiff.Left, i.tableDiff.Middle, i.tableDiff.Right)
+	baseline, control, experimental, err := stringifyRows(i.tableDiff.Left, i.tableDiff.Middle, i.tableDiff.Right)
 	if err != nil {
 		return err
 	}
 
-	i.baseline = i.parseCol(baseline)
-	i.control = i.parseCol(control)
-	i.experimental = i.parseCol(experimental)
-	i.parseCol([][]string{i.tableDiff.ColNames})
+	i.baseline = i.parseRows(baseline)
+	i.control = i.parseRows(control)
+	i.experimental = i.parseRows(experimental)
+	i.parseRows([][]string{i.tableDiff.ColNames})
 
 	i.calculateWidths()
 	return nil

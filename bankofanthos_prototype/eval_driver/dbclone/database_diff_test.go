@@ -62,9 +62,9 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		}
 
 		expectedRows := []*Row{
-			{[]any{"101122611122", time.Date(2000, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("1234"), "testuser"}},
-			{[]any{"103362343333", time.Date(2001, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("2345"), "alice"}},
-			{[]any{"107744137744", time.Date(2002, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("3456"), "eve"}},
+			{"101122611122", time.Date(2000, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("1234"), "testuser"},
+			{"103362343333", time.Date(2001, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("2345"), "alice"},
+			{"107744137744", time.Date(2002, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("3456"), "eve"},
 		}
 		if diff := cmp.Diff(expectedRows, rows); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
@@ -125,7 +125,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expectedAminusBRows := []*Row{{[]any{int32(1), "a"}}}
+		expectedAminusBRows := []*Row{{int32(1), "a"}}
 		if diff := cmp.Diff([]string{"id", "name"}, AminusBColNames); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -202,7 +202,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		expectedRows := []*Row{{[]any{int32(2), "b"}}}
+		expectedRows := []*Row{{int32(2), "b"}}
 		if diff := cmp.Diff([]string{"id", "name"}, AintersectBColNames); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
 		}
@@ -281,8 +281,8 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		}
 
 		expectedTrimPlusRows := []*Row{
-			{[]any{"103362343333", time.Date(2001, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("2345"), "alice"}},
-			{[]any{"107744137744", time.Date(2002, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("3456"), "eve"}},
+			{"103362343333", time.Date(2001, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("2345"), "alice"},
+			{"107744137744", time.Date(2002, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("3456"), "eve"},
 		}
 		if diff := cmp.Diff(expectedTrimPlusRows, trimPlusRows); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
@@ -297,7 +297,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		}
 
 		expectedTrimMinusRows := []*Row{
-			{[]any{"107744137744", time.Date(2003, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("3456"), "eve"}},
+			{"107744137744", time.Date(2003, time.Month(1), 1, 0, 0, 0, 0, time.UTC), []byte("3456"), "eve"},
 		}
 		if diff := cmp.Diff(expectedTrimMinusRows, trimMinusRows); diff != "" {
 			t.Errorf("(-want,+got):\n%s", diff)
@@ -393,28 +393,28 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		// order is {APlusOnly, BPlusOnly, APlusBPlus, AMinusOnly, BMinusOnly, AMinusBMinus}
 		expectedRowDiffs := &Diff{
 			Left: []*Row{
-				{[]any{int32(2), "B"}}, // A+
-				{[]any{nil, nil}},      // B+
-				{[]any{int32(3), "C"}}, //A+B+
-				{[]any{nil, nil}},      // A-
-				{[]any{int32(1), "A"}}, //B-
-				{[]any{nil, nil}},      // A-B-
+				{int32(2), "B"}, // A+
+				{nil, nil},      // B+
+				{int32(3), "C"}, //A+B+
+				{nil, nil},      // A-
+				{int32(1), "A"}, //B-
+				{nil, nil},      // A-B-
 			},
 			Middle: []*Row{
-				{[]any{nil, nil}},      // A+
-				{[]any{nil, nil}},      // B+
-				{[]any{nil, nil}},      //A+B+
-				{[]any{int32(4), "D"}}, // A-
-				{[]any{int32(1), "A"}}, //B-
-				{[]any{int32(0), "O"}}, // A-B-
+				{nil, nil},      // A+
+				{nil, nil},      // B+
+				{nil, nil},      //A+B+
+				{int32(4), "D"}, // A-
+				{int32(1), "A"}, //B-
+				{int32(0), "O"}, // A-B-
 			},
 			Right: []*Row{
-				{[]any{nil, nil}},      // A+
-				{[]any{int32(1), "D"}}, // B+
-				{[]any{int32(3), "C"}}, //A+B+
-				{[]any{int32(4), "D"}}, // A-
-				{[]any{nil, nil}},      //B-
-				{[]any{nil, nil}},      // A-B-
+				{nil, nil},      // A+
+				{int32(1), "D"}, // B+
+				{int32(3), "C"}, //A+B+
+				{int32(4), "D"}, // A-
+				{nil, nil},      //B-
+				{nil, nil},      // A-B-
 			},
 			ColNames: []string{"id", "name"},
 		}
@@ -521,43 +521,43 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 
 		expectedRowDiffs := &Diff{
 			Left: []*Row{
-				{[]any{int32(0), "O"}},
-				{[]any{int32(1), "A"}},
-				{[]any{nil, nil}},
-				{[]any{int32(3), "CC"}},
-				{[]any{nil, nil}},
-				{[]any{nil, nil}},
-				{[]any{int32(6), "FF"}},
-				{[]any{int32(7), "GG"}},
-				{[]any{nil, nil}},
-				{[]any{int32(9), "I"}},
-				{[]any{int32(10), "J"}},
+				{int32(0), "O"},
+				{int32(1), "A"},
+				{nil, nil},
+				{int32(3), "CC"},
+				{nil, nil},
+				{nil, nil},
+				{int32(6), "FF"},
+				{int32(7), "GG"},
+				{nil, nil},
+				{int32(9), "I"},
+				{int32(10), "J"},
 			},
 			Middle: []*Row{
-				{[]any{int32(0), "O"}},
-				{[]any{int32(1), "A"}},
-				{[]any{int32(2), "B"}},
-				{[]any{int32(3), "C"}},
-				{[]any{int32(4), "D"}},
-				{[]any{int32(5), "E"}},
-				{[]any{int32(6), "F"}},
-				{[]any{int32(7), "G"}},
-				{[]any{nil, nil}},
-				{[]any{nil, nil}},
-				{[]any{nil, nil}},
+				{int32(0), "O"},
+				{int32(1), "A"},
+				{int32(2), "B"},
+				{int32(3), "C"},
+				{int32(4), "D"},
+				{int32(5), "E"},
+				{int32(6), "F"},
+				{int32(7), "G"},
+				{nil, nil},
+				{nil, nil},
+				{nil, nil},
 			},
 			Right: []*Row{
-				{[]any{nil, nil}},
-				{[]any{int32(1), "AA"}},
-				{[]any{int32(2), "B"}},
-				{[]any{int32(3), "C"}},
-				{[]any{nil, nil}},
-				{[]any{int32(5), "EE"}},
-				{[]any{nil, nil}},
-				{[]any{int32(7), "GGG"}},
-				{[]any{int32(8), "H"}},
-				{[]any{nil, nil}},
-				{[]any{int32(10), "J"}},
+				{nil, nil},
+				{int32(1), "AA"},
+				{int32(2), "B"},
+				{int32(3), "C"},
+				{nil, nil},
+				{int32(5), "EE"},
+				{nil, nil},
+				{int32(7), "GGG"},
+				{int32(8), "H"},
+				{nil, nil},
+				{int32(10), "J"},
 			},
 			ColNames: []string{"id", "name"},
 		}

@@ -7,15 +7,15 @@ import (
 	"strings"
 )
 
+// TODO: boxify side by side diffs
 type sideBySideDiffFormatter struct {
 	tableDiff *dbclone.Diff
 	tableName string
 
-	width        int
 	widths       []int
-	baseline     []text
-	control      []text
-	experimental []text
+	baseline     [][]atom
+	control      [][]atom
+	experimental [][]atom
 	w            io.Writer
 }
 
@@ -23,33 +23,23 @@ func newSideBySideDiffFormatter(w io.Writer, tableDiff *dbclone.Diff, tableName 
 	return &sideBySideDiffFormatter{
 		tableDiff: tableDiff,
 		tableName: tableName,
-		width:     0,
 		widths:    make([]int, len(tableDiff.ColNames)),
 		w:         w,
 	}
 }
 
-func (s *sideBySideDiffFormatter) parseCol(oneWay [][]string) []text {
-	var rows []text
-	for r := 0; r < len(oneWay); r++ {
+func (s *sideBySideDiffFormatter) parseRows(rows [][]string) [][]atom {
+	var textRows [][]atom
+	for r := 0; r < len(rows); r++ {
 		var row []atom
-		for c := 0; c < len(oneWay[r]); c++ {
-			a := atom{S: oneWay[r][c], Color: Dim}
+		for c := 0; c < len(rows[r]); c++ {
+			a := atom{S: rows[r][c], Color: Dim}
 			s.widths[c] = max(len(a.S), s.widths[c])
 			row = append(row, a)
 		}
-		rows = append(rows, text{Row: row})
+		textRows = append(textRows, row)
 	}
-	return rows
-}
-
-func (s *sideBySideDiffFormatter) calculateWidths() {
-	colNums := len(s.tableDiff.ColNames)
-	s.width = 0
-	for w := 0; w < colNums; w++ {
-		s.width += s.widths[w] + 2
-	}
-	s.width = max(s.width, len(s.tableName))
+	return textRows
 }
 
 func (s *sideBySideDiffFormatter) format() error {
@@ -76,11 +66,11 @@ func (s *sideBySideDiffFormatter) format() error {
 
 	// for each row
 	for r := 0; r < len(s.baseline); r++ {
-		err := colorRow(&s.baseline[r], &s.control[r], &s.experimental[r])
+		err := boldUnequalColumns(s.baseline[r], s.control[r], s.experimental[r])
 		if err != nil {
 			return err
 		}
-		texts := []text{s.control[r], s.baseline[r], s.experimental[r]}
+		texts := [][]atom{s.control[r], s.baseline[r], s.experimental[r]}
 		for i, text := range texts {
 			end := "|"
 			if i == 2 {
@@ -88,10 +78,11 @@ func (s *sideBySideDiffFormatter) format() error {
 			}
 			writeRow(end, func(j, w int) string {
 				a := atom{}
-				if len(text.Row) > 0 {
-					a = text.Row[j]
+				if len(text) > 0 {
+					a = text[j]
 				}
-				return fmt.Sprintf(" %-*s ", w-len(a.S)+a.len(), a)
+				s := a.String()
+				return fmt.Sprintf(" %-*s ", w-len(a.S)+len(s), a)
 			})
 		}
 	}
@@ -99,16 +90,15 @@ func (s *sideBySideDiffFormatter) format() error {
 }
 
 func (s *sideBySideDiffFormatter) parseDiff() error {
-	baseline, control, experimental, err := getRowVals(s.tableDiff.Left, s.tableDiff.Middle, s.tableDiff.Right)
+	baseline, control, experimental, err := stringifyRows(s.tableDiff.Left, s.tableDiff.Middle, s.tableDiff.Right)
 	if err != nil {
 		return err
 	}
-	s.baseline = s.parseCol(baseline)
-	s.control = s.parseCol(control)
-	s.experimental = s.parseCol(experimental)
-	s.parseCol([][]string{s.tableDiff.ColNames})
+	s.baseline = s.parseRows(baseline)
+	s.control = s.parseRows(control)
+	s.experimental = s.parseRows(experimental)
+	s.parseRows([][]string{s.tableDiff.ColNames})
 
-	s.calculateWidths()
 	return nil
 }
 
