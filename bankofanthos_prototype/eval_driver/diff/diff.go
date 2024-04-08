@@ -157,14 +157,8 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 }
 
 func GetNonDeterministic(baselineService1, baselineService2 *service.Service) error {
-	// get database diff
-	err := getNonDeterministicInfo(baselineService1.DumpDbPath, baselineService2.DumpDbPath, databaseType)
-	if err != nil {
-		return err
-	}
-
 	// get response diff
-	err = getNonDeterministicInfo(baselineService1.OutputPath, baselineService2.OutputPath, responseType)
+	err := getNonDeterministicInfo(baselineService1.OutputPath, baselineService2.OutputPath, responseType)
 	if err != nil {
 		return err
 	}

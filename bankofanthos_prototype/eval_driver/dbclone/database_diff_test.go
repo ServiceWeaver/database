@@ -32,7 +32,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dbDiff := newDbDiff(connPool)
+	dbDiff := newDbDiff(connPool, "rid")
 
 	t.Run("DumpView", func(t *testing.T) {
 		err = createTriggers(ctx, connPool, cloneDdl.clonedTables["users"])
@@ -84,13 +84,13 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 	t.Run("TableMinus", func(t *testing.T) {
 		_, err = connPool.Exec(ctx,
 			`
-		CREATE TABLE TableA (id INTEGER, name VARCHAR);
-		CREATE TABLE TableB (id INTEGER, name VARCHAR);
+		CREATE TABLE TableA (id INTEGER, name VARCHAR, rid BIGINT);
+		CREATE TABLE TableB (id INTEGER, name VARCHAR, rid BIGINT);
 
-		INSERT INTO TableA VALUES(1,'a');
-		INSERT INTO TableA VALUES(2,'b');
+		INSERT INTO TableA VALUES(1,'a', 1);
+		INSERT INTO TableA VALUES(2,'b', 2);
 
-		INSERT INTO tableB VALUES(2,'b');
+		INSERT INTO tableB VALUES(2,'b', 2);
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -249,23 +249,29 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool)
+		dbDiff := newDbDiff(connPool, "rid")
 
 		_, err = connPool.Exec(ctx,
 			`
-		INSERT INTO trimtest.usersplus(accountid, username, passhash, birthday) VALUES
-		('101122611122', 'testuser', '1234', '2000-01-01'),
-		('103362343333', 'alice', '2345', '2001-01-01'),
-		('107744137744', 'eve', '3456', '2002-01-01');
+		INSERT INTO trimtest.usersplus(accountid, username, passhash, birthday, rid) VALUES
+		('101122611122', 'testuser', '1234', '2000-01-01', 0),
+		('103362343333', 'alice', '2345', '2001-01-01', 0), 
+		('107744137744', 'eve', '3456', '2002-01-01', 0);
 
-		INSERT INTO trimtest.usersminus(accountid, username, passhash, birthday) VALUES
-		('101122611122', 'testuser', '1234', '2000-01-01'),
-		('107744137744', 'eve', '3456', '2003-01-01');
+		INSERT INTO trimtest.usersminus(accountid, username, passhash, birthday, rid) VALUES
+		('101122611122', 'testuser', '1234', '2000-01-01', 0),
+		('107744137744', 'eve', '3456', '2003-01-01', 0);
 		`)
 		if err != nil {
 			t.Fatal(err)
 		}
-		trimPlus, trimMinus, err := dbDiff.trimClonedTable(ctx, cloneDdl.clonedTables["users"])
+
+		updatedA, _, err := dbDiff.getclonedTablesAtNReqs(ctx, cloneDdl.clonedTables["users"], cloneDdl.clonedTables["users"], 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		trimPlus, trimMinus, err := dbDiff.trimClonedTable(ctx, updatedA)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -384,8 +390,13 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool)
-		rowDiffs, err := dbDiff.getNonPrimaryKeyRowDiff(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"])
+		dbDiff := newDbDiff(connPool, "rid")
+		updatedA, updatedB, err := dbDiff.getclonedTablesAtNReqs(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"], 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		rowDiffs, err := dbDiff.getNonPrimaryKeyRowDiff(ctx, updatedA, updatedB)
 
 		if err != nil {
 			t.Fatal(err)
@@ -513,8 +524,13 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool)
-		rowDiffs, err := dbDiff.getPrimaryKeyRowDiff(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"])
+		dbDiff := newDbDiff(connPool, "rid")
+
+		updatedA, updatedB, err := dbDiff.getclonedTablesAtNReqs(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"], 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rowDiffs, err := dbDiff.getPrimaryKeyRowDiff(ctx, updatedA, updatedB)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -558,6 +574,147 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 				{int32(8), "H"},
 				{nil, nil},
 				{int32(10), "J"},
+			},
+			ColNames: []string{"id", "name"},
+		}
+
+		if diff := cmp.Diff(expectedRowDiffs, rowDiffs); diff != "" {
+			t.Errorf("(-want,+got):\n%s", diff)
+		}
+
+		err = cloneDdl.reset(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = cloneDdl.close(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = dropTable(ctx, connPool, "a")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = dropTable(ctx, connPool, "b")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("getPrimaryKeyRowDiffAt3", func(t *testing.T) {
+		_, err = connPool.Exec(ctx,
+			`
+		CREATE TABLE a (id INTEGER PRIMARY KEY, name VARCHAR);
+		CREATE TABLE b (id INTEGER PRIMARY KEY, name VARCHAR);
+
+		INSERT INTO a(id, name) VALUES(0,'O');
+		INSERT INTO a(id, name) VALUES(1,'A');
+		INSERT INTO a(id, name) VALUES(2,'B');
+		INSERT INTO a(id, name) VALUES(3,'C');
+		INSERT INTO a(id, name) VALUES(4,'D');
+		INSERT INTO a(id, name) VALUES(5,'E');
+		INSERT INTO a(id, name) VALUES(6,'F');
+		INSERT INTO a(id, name) VALUES(7,'G');
+
+		INSERT INTO b(id, name) VALUES(0,'O');
+		INSERT INTO b(id, name) VALUES(1,'A');
+		INSERT INTO b(id, name) VALUES(2,'B');
+		INSERT INTO b(id, name) VALUES(3,'C');
+		INSERT INTO b(id, name) VALUES(4,'D');
+		INSERT INTO b(id, name) VALUES(5,'E');
+		INSERT INTO b(id, name) VALUES(6,'F');
+		INSERT INTO b(id, name) VALUES(7,'G');
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nonPrimaryDb, err := newDatabase(ctx, connPool)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cloneDdl, err := newCloneDdl(ctx, nonPrimaryDb, "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = createTriggers(ctx, connPool, cloneDdl.clonedTables["a"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = createTriggers(ctx, connPool, cloneDdl.clonedTables["b"])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = connPool.Exec(ctx,
+			`
+		DELETE FROM B WHERE (id, name) = (0,'O');
+		UPDATE test.rid SET id = id+1;
+
+		UPDATE B SET (id, name) = (1,'AA') where (id, name) = (1, 'A');
+		UPDATE test.rid SET id = id+1;
+
+		DELETE FROM A WHERE (id, name) = (2,'B');
+		UPDATE test.rid SET id = id+1;
+
+		UPDATE A SET (id, name) = (3,'CC') where (id, name) = (3, 'C');
+		UPDATE test.rid SET id = id+1;
+
+		DELETE FROM A WHERE (id, name) = (4,'D');
+		DELETE FROM B WHERE (id, name) = (4,'D');
+		UPDATE test.rid SET id = id+1;
+
+		DELETE FROM A WHERE (id, name) = (5,'E');
+		UPDATE B SET (id, name) = (5,'EE') where (id, name) = (5, 'E');
+		UPDATE test.rid SET id = id+1;
+
+		DELETE FROM B WHERE (id, name) = (6,'F');
+		UPDATE A SET (id, name) = (6,'FF') where (id, name) = (6, 'F');
+		UPDATE test.rid SET id = id+1;
+
+		UPDATE A SET (id, name) = (7,'GG') where (id, name) = (7, 'G');
+		UPDATE B SET (id, name) = (7,'GGG') where (id, name) = (7, 'G');
+		UPDATE test.rid SET id = id+1;
+
+		INSERT INTO B(id, name) VALUES(8, 'H');
+		INSERT INTO A(id, name) VALUES(9, 'I');
+		UPDATE test.rid SET id = id+1;
+
+		INSERT INTO A(id, name) VALUES(10, 'J');
+		INSERT INTO B(id, name) VALUES(10, 'J');
+		UPDATE test.rid SET id = id+1;
+		`)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		dbDiff := newDbDiff(connPool, "rid")
+		rowDiffs, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"], 3)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		expectedRowDiffs := &Diff{
+			Left: []*Row{
+				{int32(0), "O"},
+				{int32(1), "A"},
+				{nil, nil},
+				{int32(3), "CC"},
+			},
+			Middle: []*Row{
+				{int32(0), "O"},
+				{int32(1), "A"},
+				{int32(2), "B"},
+				{int32(3), "C"},
+			},
+			Right: []*Row{
+				{nil, nil},
+				{int32(1), "AA"},
+				{int32(2), "B"},
+				{int32(3), string("C")},
 			},
 			ColNames: []string{"id", "name"},
 		}

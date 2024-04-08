@@ -3,7 +3,6 @@ package service
 import (
 	"bankofanthos_prototype/eval_driver/utility"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -11,45 +10,6 @@ import (
 type Database struct {
 	Name string
 	Url  string
-}
-
-// This function will be deprecated soon after integrating with database three way diff
-func dumpDb(dbDumpPath string) error {
-	outfile, err := os.Create(dbDumpPath)
-	if err != nil {
-		panic(err)
-	}
-	defer outfile.Close()
-
-	// dump postgresdb transactions table
-	transactionsColumns := []string{"transaction_id", "from_acct", "to_acct", "from_route", "to_route", "amount", "timestamp"}
-	transactionsQuery := fmt.Sprintf("SELECT %s FROM transactions ORDER BY %s;", strings.Join(transactionsColumns, ","), strings.Join(transactionsColumns, ","))
-
-	url := "postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable"
-	dumpPostgresdbCmd := exec.Command("psql", url, "-c", transactionsQuery)
-	dumpPostgresdbCmd.Stdout = outfile
-	dumpPostgresdbCmd.Stderr = outfile
-	err = dumpPostgresdbCmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to dump postgresdb: %v", err)
-	}
-
-	// dump accountsdb users and contacts table
-	usersColumns := []string{"accountid", "username", "passhash", "firstname", "lastname", "birthday", "timezone", "address", "state", "zip", "ssn"}
-	usersQuery := fmt.Sprintf("SELECT %s FROM Users ORDER BY %s;", strings.Join(usersColumns, ","), strings.Join(usersColumns, ","))
-
-	contactsColumns := []string{"username", "label", "account_num", "routing_num", "is_external"}
-	contactsQuery := fmt.Sprintf("SELECT %s FROM Contacts ORDER BY %s;", strings.Join(contactsColumns, ","), strings.Join(contactsColumns, ","))
-	url = "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable"
-	dumpAccountsdbCmd := exec.Command("psql", url, "-c", usersQuery, "-c", contactsQuery)
-	dumpAccountsdbCmd.Stdout = outfile
-	dumpPostgresdbCmd.Stderr = outfile
-
-	err = dumpAccountsdbCmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to dump accountsdb: %v", err)
-	}
-	return nil
 }
 
 func TakeSnapshot(db *Database, snapshotPath string) error {

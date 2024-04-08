@@ -9,17 +9,28 @@ import (
 	"strings"
 )
 
+const (
+	counterColName = "rid"
+	couterName     = "rid"
+)
+
+type counter struct {
+	Name    string
+	Colname string
+}
 type clonedTable struct {
 	Snapshot *table
 	Plus     *table
 	Minus    *table
 	View     *view
+	Counter  *counter
 }
 
 type cloneDdl struct {
 	clonedTables map[string]*clonedTable
 	database     *database
 	namespace    string
+	counterName  string // tables in same database share the same counter table
 }
 
 func newCloneDdl(ctx context.Context, Database *database, namespace string) (*cloneDdl, error) {
@@ -39,6 +50,11 @@ func newCloneDdl(ctx context.Context, Database *database, namespace string) (*cl
 
 func (c *cloneDdl) createClonedTables(ctx context.Context) error {
 	err := c.createSchema(ctx, c.namespace)
+	if err != nil {
+		return err
+	}
+
+	err = c.createCounter(ctx)
 	if err != nil {
 		return err
 	}
@@ -73,7 +89,9 @@ func (c *cloneDdl) close(ctx context.Context) error {
 }
 
 func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clonedTable, error) {
-	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot)
+	counter := &counter{Name: c.counterName, Colname: counterColName}
+
+	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot, counter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create +/- tables or view: %w", err)
 	}
@@ -106,6 +124,7 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 		Plus:     plus,
 		Minus:    minus,
 		View:     view,
+		Counter:  counter,
 	}
 
 	c.clonedTables[originalName] = clonedTable
@@ -132,7 +151,7 @@ func (c *cloneDdl) createSchema(ctx context.Context, namespace string) error {
 }
 
 // TODO: Pick name for views and plus, minus which does not exist in database
-func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table) (*table, *table, *view, error) {
+func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table, counter *counter) (*table, *table, *view, error) {
 	plus := &table{
 		Name: fmt.Sprintf("%s.%splus", c.namespace, prodTable.Name),
 		Cols: map[string]column{},
@@ -158,6 +177,10 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 		}
 		columnslst = append(columnslst, column.String())
 	}
+
+	//TODO: make sure counter col name does not exist in table and each branch have the same col name
+
+	columnslst = append(columnslst, fmt.Sprintf("%s bigint", counter.Colname))
 	columns := strings.Join(columnslst, ",\n")
 
 	// create R+
@@ -252,4 +275,21 @@ func (c *cloneDdl) applyRules(ctx context.Context, prodTable *table, view *view)
 		}
 	}
 	return nil
+}
+
+// TODO: check counter name does not exist
+func (c *cloneDdl) createCounter(ctx context.Context) error {
+	c.counterName = fmt.Sprintf("%s.%s", c.namespace, couterName)
+	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (id BIGINT);", c.counterName))
+	if err != nil {
+		return err
+	}
+
+	_, err = c.database.connPool.Exec(ctx, fmt.Sprintf("INSERT INTO %s VALUES(0);", c.counterName))
+	return err
+}
+
+func (c *cloneDdl) updateCounter(ctx context.Context) error {
+	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("UPDATE %s SET id=id+1", c.counterName))
+	return err
 }

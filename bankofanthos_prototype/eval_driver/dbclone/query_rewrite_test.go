@@ -54,15 +54,17 @@ func TestQueryRewrite(t *testing.T) {
 			Procedure: &procedure{
 				Name: "users_redirect_insert",
 				ProSrc: `
+				DECLARE rid BIGINT;
 				BEGIN
+				rid := (SELECT id FROM test.rid);
 				IF EXISTS (SELECT * FROM users WHERE (accountid) = (NEW.accountid)) THEN
 					RAISE EXCEPTION 'column % already exists', NEW.accountid;
 				END IF;
 				IF EXISTS (SELECT * FROM users WHERE (username) = (NEW.username)) THEN
 					RAISE EXCEPTION 'column % already exists', NEW.username;
 				END IF;
-				INSERT INTO test.usersplus (accountid, birthday, passhash, username)    
-				VALUES (NEW.accountid, NEW.birthday, NEW.passhash, NEW.username);
+				INSERT INTO test.usersplus (accountid, birthday, passhash, username, rid)    
+				VALUES (NEW.accountid, NEW.birthday, NEW.passhash, NEW.username, rid);
 				RETURN NEW;
 				END;
 				`,
@@ -93,12 +95,14 @@ func TestQueryRewrite(t *testing.T) {
 			Procedure: &procedure{
 				Name: "contacts_redirect_insert",
 				ProSrc: `
+				DECLARE rid BIGINT;
 				BEGIN
+				rid := (SELECT id FROM test.rid);
 				IF NOT EXISTS (SELECT * FROM users WHERE (username) = (NEW.username)) THEN
 				RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in  users table';
 				END IF;
-				INSERT INTO test.contactsplus (account_num, is_external, username)    
-				VALUES (NEW.account_num, NEW.is_external, NEW.username);
+				INSERT INTO test.contactsplus (account_num, is_external, username, rid)    
+				VALUES (NEW.account_num, NEW.is_external, NEW.username, rid);
 				RETURN NEW;
 				END;
 				`,
@@ -129,7 +133,9 @@ func TestQueryRewrite(t *testing.T) {
 			Procedure: &procedure{
 				Name: "users_redirect_update",
 				ProSrc: `
+				DECLARE rid BIGINT;
 				BEGIN
+				rid := (SELECT id FROM test.rid);
 				IF EXISTS (SELECT * FROM users WHERE (accountid) = (NEW.accountid)) AND (NEW.accountid) != (OLD.accountid) THEN
 					RAISE EXCEPTION 'column % already exists', NEW.accountid;
 				END IF;
@@ -139,8 +145,8 @@ func TestQueryRewrite(t *testing.T) {
 				IF EXISTS (SELECT * FROM contacts WHERE (username) = (OLD.username)) AND (NEW.username) != (OLD.username) THEN
 				RAISE EXCEPTION 'violates foreign key constraint';
 				END IF;
-				INSERT INTO test.usersminus (accountid, birthday, passhash, username) VALUES (OLD.accountid, OLD.birthday, OLD.passhash, OLD.username);
-				INSERT INTO test.usersplus (accountid, birthday, passhash, username) VALUES (NEW.accountid, NEW.birthday, NEW.passhash, NEW.username);
+				INSERT INTO test.usersminus (accountid, birthday, passhash, username, rid) VALUES (OLD.accountid, OLD.birthday, OLD.passhash, OLD.username, rid);
+				INSERT INTO test.usersplus (accountid, birthday, passhash, username, rid) VALUES (NEW.accountid, NEW.birthday, NEW.passhash, NEW.username, rid);
 				RETURN NEW;
 				END;
 				`,
@@ -171,12 +177,14 @@ func TestQueryRewrite(t *testing.T) {
 			Procedure: &procedure{
 				Name: "contacts_redirect_update",
 				ProSrc: `
+				DECLARE rid BIGINT;
 				BEGIN
+				rid := (SELECT id FROM test.rid);
 				IF NOT EXISTS (SELECT * FROM users WHERE (username) = (NEW.username)) THEN
 				RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in users table';
 				END IF;
-				INSERT INTO test.contactsminus (account_num, is_external, username) VALUES (OLD.account_num, OLD.is_external, OLD.username);
-				INSERT INTO test.contactsplus (account_num, is_external, username) VALUES (NEW.account_num, NEW.is_external, NEW.username);
+				INSERT INTO test.contactsminus (account_num, is_external, username, rid) VALUES (OLD.account_num, OLD.is_external, OLD.username, rid);
+				INSERT INTO test.contactsplus (account_num, is_external, username, rid) VALUES (NEW.account_num, NEW.is_external, NEW.username, rid);
 				RETURN NEW;
 				END;
 				`,
@@ -207,11 +215,13 @@ func TestQueryRewrite(t *testing.T) {
 			Procedure: &procedure{
 				Name: "users_redirect_delete",
 				ProSrc: `
+				DECLARE rid BIGINT;
 				BEGIN
+				rid := (SELECT id FROM test.rid);
 				IF EXISTS (SELECT * FROM contacts WHERE (username) = (OLD.username)) THEN
 				RAISE EXCEPTION 'violates foreign key constraint';
 				END IF;
-				INSERT INTO test.usersminus (accountid, birthday, passhash, username) VALUES (OLD.accountid, OLD.birthday, OLD.passhash, OLD.username);
+				INSERT INTO test.usersminus (accountid, birthday, passhash, username, rid) VALUES (OLD.accountid, OLD.birthday, OLD.passhash, OLD.username, rid);
 				RETURN OLD;
 				END;
 				`,
@@ -242,8 +252,10 @@ func TestQueryRewrite(t *testing.T) {
 			Procedure: &procedure{
 				Name: "contacts_redirect_delete",
 				ProSrc: `
+				DECLARE rid BIGINT;
 				BEGIN
-				INSERT INTO test.contactsminus (account_num, is_external, username) VALUES (OLD.account_num, OLD.is_external, OLD.username);
+				rid := (SELECT id FROM test.rid);
+				INSERT INTO test.contactsminus (account_num, is_external, username, rid) VALUES (OLD.account_num, OLD.is_external, OLD.username, rid);
 				RETURN OLD;
 				END;
 				`,

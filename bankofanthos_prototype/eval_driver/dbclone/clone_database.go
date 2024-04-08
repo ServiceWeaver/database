@@ -89,21 +89,26 @@ func (b *Branch) Commit(ctx context.Context) error {
 	return nil
 }
 
+func (b *Branch) UpdateReqId(ctx context.Context) error {
+	return b.clonedDdl.updateCounter(ctx)
+}
+
 // For each two branch, compare each table and get rowDiffs for each table
-func (b *Brancher) ComputeDiff(ctx context.Context, A *Branch, B *Branch) (map[string]*Diff, error) {
+func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n int) (map[string]*Diff, error) {
 	aTables := maps.Keys(A.clonedDdl.clonedTables)
 	bTables := maps.Keys(B.clonedDdl.clonedTables)
 	sort.Strings(aTables)
 	sort.Strings(bTables)
 	if !slices.Equal(aTables, bTables) {
-		return nil, fmt.Errorf("two branches have different tables %s and %s, cannot compare.", maps.Keys(A.clonedDdl.clonedTables), maps.Keys(B.clonedDdl.clonedTables))
+		return nil, fmt.Errorf("two branches have different tables %s and %s, cannot compare", maps.Keys(A.clonedDdl.clonedTables), maps.Keys(B.clonedDdl.clonedTables))
 	}
 
-	dbDiff := newDbDiff(b.db)
 	diffs := map[string]*Diff{}
 	for tableName, clonedTableA := range A.clonedDdl.clonedTables {
 		clonedTableB := B.clonedDdl.clonedTables[tableName]
-		diff, err := dbDiff.getClonedTableRowDiff(ctx, clonedTableA, clonedTableB)
+		dbDiff := newDbDiff(b.db, clonedTableA.Counter.Colname)
+
+		diff, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, clonedTableA, clonedTableB, n)
 		if err != nil {
 			return nil, err
 		}
@@ -111,4 +116,18 @@ func (b *Brancher) ComputeDiff(ctx context.Context, A *Branch, B *Branch) (map[s
 	}
 
 	return diffs, nil
+}
+
+// For each two branch, compare each table and get rowDiffs for each table at each request id
+func (b *Brancher) ComputeDiffPerReq(ctx context.Context, A *Branch, B *Branch, N int) ([]map[string]*Diff, error) {
+	var ReqMaps []map[string]*Diff
+	for n := 0; n < N; n++ {
+		diffs, err := b.ComputeDiffAtN(ctx, A, B, n)
+		if err != nil {
+			return nil, err
+		}
+		ReqMaps = append(ReqMaps, diffs)
+	}
+
+	return ReqMaps, nil
 }

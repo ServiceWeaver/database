@@ -88,12 +88,12 @@ func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
 	return &service.Database{Name: databaseUrl[posS+1 : posE], Url: databaseUrl}, nil
 }
 
-func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclone.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string) (map[string]*dbclone.Branch, *service.Service, error) {
+func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclone.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string) (*service.Service, error) {
 	branchMap := map[string]*dbclone.Branch{}
 	for name, brancher := range branchers {
 		b, err := brancher.Branch(ctx, namespace)
 		if err != nil {
-			return nil, nil, fmt.Errorf("branch %s failed: %v", namespace, err)
+			return nil, fmt.Errorf("branch %s failed: %v", namespace, err)
 		}
 		defer func() {
 			err = b.Commit(ctx)
@@ -104,18 +104,51 @@ func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclo
 
 		branchMap[name] = b
 	}
-	trail, err := service.Init(runCnt, listenPorts, prodServices, reqPorts)
+	trail, err := service.Init(runCnt, listenPorts, prodServices, reqPorts, branchMap)
 	if err != nil {
 		log.Panicf("Init service failed: %v", err)
 	}
-	trail.Run(service.ListOfReqs1)
-	return branchMap, trail, nil
+	trail.Run(ctx, service.ListOfReqs1)
+	return trail, nil
+}
+
+func printDbDiffs(ctx context.Context, branchers map[string]*dbclone.Brancher, runName string, branchA, branchB map[string]*dbclone.Branch, inlineDiff bool, reqCnt int) {
+	f, err := os.Create(fmt.Sprintf("%sDiffPerReq_%s", outPath, runName))
+	if err != nil {
+		log.Panicf("Failed to create file: %v", err)
+	}
+	defer f.Close()
+
+	for name, brancher := range branchers {
+		branchDiffs, err := brancher.ComputeDiffAtN(ctx, branchA[name], branchB[name], reqCnt)
+		if err != nil {
+			log.Panicf("failed to compute diff: %v", err)
+		}
+		dbDiffOut, err := diff.DisplayDiff(branchDiffs, inlineDiff)
+		if err != nil {
+			log.Panicf("failed to display inline diff: %v", err)
+		}
+		fmt.Println(dbDiffOut)
+
+		branchDiffPerReqs, err := brancher.ComputeDiffPerReq(ctx, branchA[name], branchB[name], reqCnt)
+		if err != nil {
+			log.Panicf("failed to compute diff: %v", err)
+		}
+		for n, diffPerReq := range branchDiffPerReqs {
+			dbDiffOutPerReq, err := diff.DisplayDiff(diffPerReq, inlineDiff)
+			if err != nil {
+				log.Panicf("failed to display diff per req: %v", err)
+			}
+			fmt.Fprintf(f, "[%d]\n%s\n", n, dbDiffOutPerReq)
+		}
+	}
 }
 
 func main() {
 	// parse flags
 	var origListenPort, expListenPort, baseListenPort, dbUrls string
 	var dropClonedTables, inlineDiff bool
+
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
 	flag.StringVar(&baseListenPort, "expListenPort", "9001", "Listen port for experimental service.")
 	flag.StringVar(&expListenPort, "baseListenPort", "9002", "Listen port for baseline service.")
@@ -180,11 +213,11 @@ func main() {
 		branchers[prodDb.Name] = brancher
 	}
 
-	baselineBranches, baselineService, err := runTrail(ctx, "B", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
+	baselineService, err := runTrail(ctx, "B", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range baselineBranches {
+	for _, branch := range baselineService.Branches {
 		defer func() {
 			if dropClonedTables {
 				err = branch.Delete(ctx)
@@ -197,11 +230,11 @@ func main() {
 
 	runCnt += 1
 
-	baseline2Branches, baselineService2, err := runTrail(ctx, "BTWO", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
+	baselineService2, err := runTrail(ctx, "BTWO", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range baseline2Branches {
+	for _, branch := range baselineService2.Branches {
 		defer func() {
 			if dropClonedTables {
 				err = branch.Delete(ctx)
@@ -218,11 +251,11 @@ func main() {
 
 	// run experimental service
 	runCnt += 1
-	experientalServiceBranches, experientalService, err := runTrail(ctx, "E", branchers, runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt])
+	experientalService, err := runTrail(ctx, "E", branchers, runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range experientalServiceBranches {
+	for _, branch := range experientalService.Branches {
 		defer func() {
 			if dropClonedTables {
 				err = branch.Delete(ctx)
@@ -238,25 +271,15 @@ func main() {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	for name, brancher := range branchers {
-		branchDiffs, err := brancher.ComputeDiff(ctx, baselineBranches[name], experientalServiceBranches[name])
-		if err != nil {
-			log.Panicf("failed to compute diff: %v", err)
-		}
-		dbDiffOut, err := diff.DisplayDiff(branchDiffs, inlineDiff)
-		if err != nil {
-			log.Panicf("failed to display inline diff: %v", err)
-		}
-		fmt.Println(dbDiffOut)
-	}
+	printDbDiffs(ctx, branchers, "E", baselineService.Branches, experientalService.Branches, inlineDiff, len(service.ListOfReqs1()))
 
 	// run requests on both baseline and experiental
 	runCnt += 1
-	b1E1ServiceBranches, b1E1Service, err := runTrail(ctx, "BE", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	b1E1Service, err := runTrail(ctx, "BE", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range b1E1ServiceBranches {
+	for _, branch := range b1E1Service.Branches {
 		defer func() {
 			if dropClonedTables {
 				err = branch.Delete(ctx)
@@ -272,25 +295,15 @@ func main() {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	for name, brancher := range branchers {
-		branchDiffs, err := brancher.ComputeDiff(ctx, baselineBranches[name], b1E1ServiceBranches[name])
-		if err != nil {
-			log.Panicf("failed to compute diff: %v", err)
-		}
-		dbDiffOut, err := diff.DisplayDiff(branchDiffs, inlineDiff)
-		if err != nil {
-			log.Panicf("failed to display inline diff: %v", err)
-		}
-		fmt.Println(dbDiffOut)
-	}
+	printDbDiffs(ctx, branchers, "BE", baselineService.Branches, b1E1Service.Branches, inlineDiff, len(service.ListOfReqs1()))
 
 	// run requests on both experiental and baseline
 	runCnt += 1
-	e1B1ServiceBranches, e1B1Service, err := runTrail(ctx, "EB", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	e1B1Service, err := runTrail(ctx, "EB", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range e1B1ServiceBranches {
+	for _, branch := range e1B1Service.Branches {
 		defer func() {
 			if dropClonedTables {
 				err = branch.Delete(ctx)
@@ -306,17 +319,7 @@ func main() {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	for name, brancher := range branchers {
-		branchDiffs, err := brancher.ComputeDiff(ctx, baselineBranches[name], e1B1ServiceBranches[name])
-		if err != nil {
-			log.Panicf("failed to compute diff: %v", err)
-		}
-		dbDiffOut, err := diff.DisplayDiff(branchDiffs, inlineDiff)
-		if err != nil {
-			log.Panicf("failed to display inline diff: %v", err)
-		}
-		fmt.Println(dbDiffOut)
-	}
+	printDbDiffs(ctx, branchers, "EB", baselineService.Branches, e1B1Service.Branches, inlineDiff, len(service.ListOfReqs1()))
 
 	fmt.Println("Exiting program...")
 }

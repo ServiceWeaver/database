@@ -46,7 +46,9 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
-	BEGIN`, clonedTable.View.Name)
+	DECLARE %s BIGINT;
+	BEGIN
+	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	// TODO: make it more generic way for auto-generate id
 	if idGeneratorQuery != "" {
@@ -84,6 +86,9 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 		}
 	}
 
+	// insert id to cols
+	cols = append(cols, clonedTable.Counter.Colname)
+	newCols = append(newCols, clonedTable.Counter.Colname)
 	storedProcedureQuery += fmt.Sprintf(`
 	INSERT INTO %s (%s) 
 	VALUES (%s);
@@ -130,7 +135,9 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
-	BEGIN`, clonedTable.View.Name)
+	DECLARE %s BIGINT;
+	BEGIN
+	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	for _, index := range clonedTable.Snapshot.Indexes {
 		if index.IsUnique {
@@ -181,6 +188,11 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 		}
 	}
 
+	// insert id to cols
+	cols = append(cols, clonedTable.Counter.Colname)
+	newCols = append(newCols, clonedTable.Counter.Colname)
+	oldCols = append(oldCols, clonedTable.Counter.Colname)
+
 	storedProcedureQuery += fmt.Sprintf(`
 	INSERT INTO %s (%s) VALUES (%s);
 	INSERT INTO %s (%s) VALUES (%s);
@@ -224,7 +236,9 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
-	BEGIN`, clonedTable.View.Name)
+	DECLARE %s BIGINT;
+	BEGIN
+	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	// TODO: Add other foreign key actions
 	// check if the key is referenced by other table
@@ -244,6 +258,10 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 		}
 
 	}
+
+	// insert id to cols
+	cols = append(cols, clonedTable.Counter.Colname)
+	oldCols = append(oldCols, clonedTable.Counter.Colname)
 
 	storedProcedureQuery += fmt.Sprintf(`
 	INSERT INTO %s (%s) VALUES (%s);
