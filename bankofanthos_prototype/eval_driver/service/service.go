@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"bankofanthos_prototype/eval_driver/dbclone"
 
 	"golang.org/x/net/publicsuffix"
 )
@@ -33,23 +36,22 @@ type Service struct {
 	Runs         string
 	ListenPorts  []string
 	OutputPath   string
-	DumpDbPath   string
 	LogPath      string
 	ProdServices []ProdService
+	Branches     map[string]*dbclone.Branch
 
 	ReqPorts []string
 }
 
-func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string) (*Service, error) {
+func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, branches map[string]*dbclone.Branch) (*Service, error) {
 	service := &Service{
 		Runs:         fmt.Sprintf("%d", curRun),
 		ListenPorts:  listenPorts,
 		LogPath:      fmt.Sprintf("%slog%d", logPath, curRun),
 		OutputPath:   fmt.Sprintf("%sresp%d", outPath, curRun),
-		DumpDbPath:   fmt.Sprintf("%sdb%d.sql", outPath, curRun),
 		ProdServices: prodServices,
-
-		ReqPorts: reqPorts,
+		Branches:     branches,
+		ReqPorts:     reqPorts,
 	}
 
 	for i := 0; i < len(prodServices); i++ {
@@ -159,7 +161,7 @@ func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	}
 }
 
-func (s Service) Run(r ListOfReqs) {
+func (s Service) Run(ctx context.Context, r ListOfReqs) {
 	cmdCh := make(chan *exec.Cmd, len(s.ProdServices))
 	upCh := make(chan bool, len(s.ProdServices))
 	var wg sync.WaitGroup
@@ -171,19 +173,14 @@ func (s Service) Run(r ListOfReqs) {
 		}(prodService.Bin, s.ConfigPaths[i], i)
 	}
 
-	s.sendRequests(upCh, r)
+	s.sendRequests(ctx, upCh, r)
 	go s.stop(cmdCh, len(s.ProdServices))
 	wg.Wait()
-
-	err := dumpDb(s.DumpDbPath)
-	if err != nil {
-		log.Fatalf("Failed to dump db: %v", err)
-	}
 
 	fmt.Println("Finished running service")
 }
 
-func (s Service) sendListOfReqs(client http.Client, rFunc ListOfReqs, ports []string) error {
+func (s Service) sendListOfReqs(ctx context.Context, client http.Client, rFunc ListOfReqs, ports []string) error {
 	reqs := rFunc()
 	for i, r := range reqs {
 		output, err := req(client, ports[i], r)
@@ -191,12 +188,18 @@ func (s Service) sendListOfReqs(client http.Client, rFunc ListOfReqs, ports []st
 			return err
 		}
 		s.writeOutput(output, s.OutputPath)
+		// update req id
+		for _, branch := range s.Branches {
+			if err := branch.IncrementReqId(ctx); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
 }
 
-func (s Service) sendRequests(upCh chan bool, r ListOfReqs) error {
+func (s Service) sendRequests(ctx context.Context, upCh chan bool, r ListOfReqs) error {
 	options := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}
@@ -213,7 +216,7 @@ func (s Service) sendRequests(upCh chan bool, r ListOfReqs) error {
 			i++
 			if i == len(s.ConfigPaths) {
 				fmt.Println("Start sending requests")
-				err = s.sendListOfReqs(client, r, s.ReqPorts)
+				err = s.sendListOfReqs(ctx, client, r, s.ReqPorts)
 				if err != nil {
 					return err
 				}

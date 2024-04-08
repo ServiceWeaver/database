@@ -39,12 +39,21 @@ func (d diffType) String() string {
 	return [...]string{"APlusOnly", "BPlusOnly", "APlusBPlus", "AMinusOnly", "BMinusOnly", "AMinusBMinus", "PrimaryKey"}[d-1]
 }
 
-type dbDiff struct {
-	connPool *pgxpool.Pool
+type clonedTableAtN struct {
+	Snapshot *table
+	Plus     *view
+	Minus    *view
+	View     *view
+	Counter  *counter
 }
 
-func newDbDiff(connPool *pgxpool.Pool) *dbDiff {
-	return &dbDiff{connPool: connPool}
+type dbDiff struct {
+	connPool   *pgxpool.Pool
+	counterCol string
+}
+
+func newDbDiff(connPool *pgxpool.Pool, counterCol string) *dbDiff {
+	return &dbDiff{connPool: connPool, counterCol: counterCol}
 }
 
 // dump dumps rows in view without any order.
@@ -85,15 +94,15 @@ func (d *dbDiff) dumpView(ctx context.Context, view *view) ([]*Row, []string, er
 	return dumpRows, colNames, rows.Err()
 }
 
-func (d *dbDiff) trimClonedTable(ctx context.Context, clonedTable *clonedTable) (*view, *view, error) {
+func (d *dbDiff) trimClonedTable(ctx context.Context, clonedTable *clonedTableAtN) (*view, *view, error) {
 	trimPlusName := clonedTable.Plus.Name + "trim"
-	trimPlus, err := d.minusTables(ctx, clonedTable.Plus, clonedTable.Minus, trimPlusName)
+	trimPlus, err := d.minusViews(ctx, clonedTable.Plus, clonedTable.Minus, trimPlusName)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	trimMinusName := clonedTable.Minus.Name + "trim"
-	trimMinus, err := d.minusTables(ctx, clonedTable.Minus, clonedTable.Plus, trimMinusName)
+	trimMinus, err := d.minusViews(ctx, clonedTable.Minus, clonedTable.Plus, trimMinusName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -160,7 +169,7 @@ func (d *dbDiff) getPrimaryKeyCols(table *table) []string {
 	return nil
 }
 
-func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view, aMinus *view, bMinus *view, clonedTableA *clonedTable, cloneTableB *clonedTable) (*view, error) {
+func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view, aMinus *view, bMinus *view, clonedTableA *clonedTableAtN, cloneTableB *clonedTableAtN) (*view, error) {
 	var colNames []string
 	if !reflect.DeepEqual(clonedTableA.View.Cols, cloneTableB.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot union", clonedTableA.View.Cols, cloneTableB.View.Cols)
@@ -256,7 +265,7 @@ func (d *dbDiff) fillRowSlices(val []any, length int) []*Row {
 //	B- -A-  | B- - A-    | nil
 //	nil     | A- \cap B- | nil
 //	nil     | A- - B-    | A- - B-
-func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
+func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTableAtN, clonedTableB *clonedTableAtN) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableA.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot intersect", clonedTableA.View.Cols, clonedTableA.View.Cols)
 	}
@@ -264,6 +273,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 
 	var views []*view
 	// trim cloned table A
+
 	aPlus, aMinus, err := d.trimClonedTable(ctx, clonedTableA)
 	if err != nil {
 		return nil, err
@@ -395,7 +405,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 // middle we will show distinct deleted from both A and B
 // right we will show inserted in B, and deleted only from A
 // because primary key is unique, so for each way there should be only one row with same primary key
-func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
+func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedTableAtN, clonedTableB *clonedTableAtN) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableB.View.Cols) {
 		return nil, fmt.Errorf("viewA %v and viewB %v have different columns, cannot diff", clonedTableA.View.Cols, clonedTableA.View.Cols)
 	}
@@ -494,7 +504,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	return rowDiff, nil
 }
 
-func (d *dbDiff) getClonedTableRowDiff(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable) (*Diff, error) {
+func (d *dbDiff) getClonedTableRowDiff(ctx context.Context, clonedTableA *clonedTableAtN, clonedTableB *clonedTableAtN) (*Diff, error) {
 	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableB.View.Cols) {
 		return nil, fmt.Errorf("cannot get row diff for different cols, tableA %v, tableB %v ", clonedTableA.View.Cols, clonedTableB.View.Cols)
 	}
@@ -505,4 +515,63 @@ func (d *dbDiff) getClonedTableRowDiff(ctx context.Context, clonedTableA *cloned
 		return d.getNonPrimaryKeyRowDiff(ctx, clonedTableA, clonedTableB)
 	}
 	return d.getPrimaryKeyRowDiff(ctx, clonedTableA, clonedTableB)
+}
+
+func (d *dbDiff) getclonedTablesAtNReqs(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable, n int) (*clonedTableAtN, *clonedTableAtN, error) {
+	tables := []*table{clonedTableA.Plus, clonedTableA.Minus, clonedTableB.Plus, clonedTableB.Minus}
+	for _, t := range tables {
+		query := fmt.Sprintf(`                                                                                                                                                                           
+		CREATE OR REPLACE VIEW %s AS (                                                                                                                                                                              
+			SELECT * FROM %s                                                                                                                                                                                                                                                                                                                                           
+			where %s <= %d
+			ORDER BY %s                                                                                                                                                                              
+		);                                                                                                                                                                                               
+		`, fmt.Sprintf("%s%d", t.Name, n), t.Name, clonedTableA.Counter.Colname, n, clonedTableA.Counter.Colname)
+
+		if _, err := d.connPool.Exec(ctx, query); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	updatedA := &clonedTableAtN{
+		Counter: clonedTableA.Counter,
+		Plus: &view{
+			Name: fmt.Sprintf("%s%d", clonedTableA.Plus.Name, n),
+			Cols: clonedTableA.Plus.Cols,
+		},
+		Minus: &view{
+			Name: fmt.Sprintf("%s%d", clonedTableA.Minus.Name, n),
+			Cols: clonedTableA.Minus.Cols,
+		},
+		View:     clonedTableA.View,
+		Snapshot: clonedTableA.Snapshot,
+	}
+
+	updatedB := &clonedTableAtN{
+		Counter: clonedTableB.Counter,
+		Plus: &view{
+			Name: fmt.Sprintf("%s%d", clonedTableB.Plus.Name, n),
+			Cols: clonedTableB.Plus.Cols,
+		},
+		Minus: &view{
+			Name: fmt.Sprintf("%s%d", clonedTableB.Minus.Name, n),
+			Cols: clonedTableB.Minus.Cols,
+		},
+		View:     clonedTableB.View,
+		Snapshot: clonedTableB.Snapshot,
+	}
+
+	return updatedA, updatedB, nil
+}
+
+func (d *dbDiff) getClonedTableRowDiffAtNReqs(ctx context.Context, clonedTableA *clonedTable, clonedTableB *clonedTable, n int) (*Diff, error) {
+	if !reflect.DeepEqual(clonedTableA.View.Cols, clonedTableB.View.Cols) {
+		return nil, fmt.Errorf("cannot get row diff for different cols, tableA %v, tableB %v ", clonedTableA.View.Cols, clonedTableB.View.Cols)
+	}
+	updatedA, updatedB, err := d.getclonedTablesAtNReqs(ctx, clonedTableA, clonedTableB, n)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cloned tables at n reqs, %w", err)
+	}
+
+	return d.getClonedTableRowDiff(ctx, updatedA, updatedB)
 }

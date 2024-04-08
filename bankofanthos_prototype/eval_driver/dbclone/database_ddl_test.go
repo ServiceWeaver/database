@@ -73,6 +73,7 @@ func TestCreateCloneDatabase(t *testing.T) {
 					"account_num": {Name: "account_num", DataType: "character", CharacterMaximumLength: 12, Nullable: "YES"},
 					"is_external": {Name: "is_external", DataType: "boolean", Nullable: "YES"},
 				}},
+			Counter: &counter{Name: "test.rid", Colname: "rid"},
 		}
 
 		if diff := cmp.Diff(expectedContactTable, cloneDdl.clonedTables["contacts"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
@@ -123,6 +124,7 @@ func TestCreateCloneDatabase(t *testing.T) {
 				},
 				Rules: []rule{{Name: "view_prevent_update", Definition: "CREATE RULE view_prevent_update AS ON UPDATE TO public.usersview DO INSTEAD NOTHING;"}},
 			},
+			Counter: &counter{Name: "test.rid", Colname: "rid"},
 		}
 
 		if diff := cmp.Diff(expectedUserTable, cloneDdl.clonedTables["users"], idxOpt, ruleOpt, sortStringSlice); diff != "" {
