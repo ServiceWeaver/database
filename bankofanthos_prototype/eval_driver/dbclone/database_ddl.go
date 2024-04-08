@@ -30,7 +30,7 @@ type cloneDdl struct {
 	clonedTables map[string]*clonedTable
 	database     *database
 	namespace    string
-	counterName  string // tables in same database share the same counter table
+	counter      *counter // tables in same database share the same counter table
 }
 
 func newCloneDdl(ctx context.Context, Database *database, namespace string) (*cloneDdl, error) {
@@ -89,9 +89,8 @@ func (c *cloneDdl) close(ctx context.Context) error {
 }
 
 func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clonedTable, error) {
-	counter := &counter{Name: c.counterName, Colname: counterColName}
 
-	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot, counter)
+	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot, c.counter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create +/- tables or view: %w", err)
 	}
@@ -124,7 +123,7 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 		Plus:     plus,
 		Minus:    minus,
 		View:     view,
-		Counter:  counter,
+		Counter:  c.counter,
 	}
 
 	c.clonedTables[originalName] = clonedTable
@@ -279,17 +278,17 @@ func (c *cloneDdl) applyRules(ctx context.Context, prodTable *table, view *view)
 
 // TODO: check counter name does not exist
 func (c *cloneDdl) createCounter(ctx context.Context) error {
-	c.counterName = fmt.Sprintf("%s.%s", c.namespace, couterName)
-	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (id BIGINT);", c.counterName))
+	c.counter = &counter{Name: fmt.Sprintf("%s.%s", c.namespace, couterName), Colname: counterColName}
+	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("CREATE TABLE %s (id BIGINT);", c.counter.Name))
 	if err != nil {
 		return err
 	}
 
-	_, err = c.database.connPool.Exec(ctx, fmt.Sprintf("INSERT INTO %s VALUES(0);", c.counterName))
+	_, err = c.database.connPool.Exec(ctx, fmt.Sprintf("INSERT INTO %s VALUES(0)", c.counter.Name))
 	return err
 }
 
-func (c *cloneDdl) updateCounter(ctx context.Context) error {
-	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("UPDATE %s SET id=id+1", c.counterName))
+func (c *cloneDdl) incrementCounter(ctx context.Context) error {
+	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("UPDATE %s SET id=id+1", c.counter.Name))
 	return err
 }

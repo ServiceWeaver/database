@@ -116,7 +116,6 @@ func (d *dbDiff) combine(ctx context.Context, name, a string, acolumns map[strin
 	}
 
 	columnNames := maps.Keys(acolumns)
-	columnNames = append([]string{d.counterCol}, columnNames...)
 	sort.Strings(columnNames)
 	joined := strings.Join(columnNames, ", ")
 	query := fmt.Sprintf(`                                                                                                                                                                           
@@ -524,9 +523,10 @@ func (d *dbDiff) getclonedTablesAtNReqs(ctx context.Context, clonedTableA *clone
 		query := fmt.Sprintf(`                                                                                                                                                                           
 		CREATE OR REPLACE VIEW %s AS (                                                                                                                                                                              
 			SELECT * FROM %s                                                                                                                                                                                                                                                                                                                                           
-			where %s <= %d                                                                                                                                                                              
+			where %s <= %d
+			ORDER BY %s                                                                                                                                                                              
 		);                                                                                                                                                                                               
-		`, fmt.Sprintf("%s%d", t.Name, n), t.Name, clonedTableA.Counter.Colname, n)
+		`, fmt.Sprintf("%s%d", t.Name, n), t.Name, clonedTableA.Counter.Colname, n, clonedTableA.Counter.Colname)
 
 		if _, err := d.connPool.Exec(ctx, query); err != nil {
 			return nil, nil, err

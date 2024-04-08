@@ -190,7 +190,7 @@ func (s Service) sendListOfReqs(ctx context.Context, client http.Client, rFunc L
 		s.writeOutput(output, s.OutputPath)
 		// update req id
 		for _, branch := range s.Branches {
-			if err := branch.UpdateReqId(ctx); err != nil {
+			if err := branch.IncrementReqId(ctx); err != nil {
 				return err
 			}
 		}

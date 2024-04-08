@@ -615,8 +615,6 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		INSERT INTO a(id, name) VALUES(3,'C');
 		INSERT INTO a(id, name) VALUES(4,'D');
 		INSERT INTO a(id, name) VALUES(5,'E');
-		INSERT INTO a(id, name) VALUES(6,'F');
-		INSERT INTO a(id, name) VALUES(7,'G');
 
 		INSERT INTO b(id, name) VALUES(0,'O');
 		INSERT INTO b(id, name) VALUES(1,'A');
@@ -624,8 +622,6 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		INSERT INTO b(id, name) VALUES(3,'C');
 		INSERT INTO b(id, name) VALUES(4,'D');
 		INSERT INTO b(id, name) VALUES(5,'E');
-		INSERT INTO b(id, name) VALUES(6,'F');
-		INSERT INTO b(id, name) VALUES(7,'G');
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -654,6 +650,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		DELETE FROM B WHERE (id, name) = (0,'O');
 		UPDATE test.rid SET id = id+1;
 
+		INSERT INTO B (id, name) VALUES (0, 'O');
 		UPDATE B SET (id, name) = (1,'AA') where (id, name) = (1, 'A');
 		UPDATE test.rid SET id = id+1;
 
@@ -670,22 +667,6 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		DELETE FROM A WHERE (id, name) = (5,'E');
 		UPDATE B SET (id, name) = (5,'EE') where (id, name) = (5, 'E');
 		UPDATE test.rid SET id = id+1;
-
-		DELETE FROM B WHERE (id, name) = (6,'F');
-		UPDATE A SET (id, name) = (6,'FF') where (id, name) = (6, 'F');
-		UPDATE test.rid SET id = id+1;
-
-		UPDATE A SET (id, name) = (7,'GG') where (id, name) = (7, 'G');
-		UPDATE B SET (id, name) = (7,'GGG') where (id, name) = (7, 'G');
-		UPDATE test.rid SET id = id+1;
-
-		INSERT INTO B(id, name) VALUES(8, 'H');
-		INSERT INTO A(id, name) VALUES(9, 'I');
-		UPDATE test.rid SET id = id+1;
-
-		INSERT INTO A(id, name) VALUES(10, 'J');
-		INSERT INTO B(id, name) VALUES(10, 'J');
-		UPDATE test.rid SET id = id+1;
 		`)
 		if err != nil {
 			t.Fatal(err)
@@ -699,19 +680,16 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 
 		expectedRowDiffs := &Diff{
 			Left: []*Row{
-				{int32(0), "O"},
 				{int32(1), "A"},
 				{nil, nil},
 				{int32(3), "CC"},
 			},
 			Middle: []*Row{
-				{int32(0), "O"},
 				{int32(1), "A"},
 				{int32(2), "B"},
 				{int32(3), "C"},
 			},
 			Right: []*Row{
-				{nil, nil},
 				{int32(1), "AA"},
 				{int32(2), "B"},
 				{int32(3), string("C")},

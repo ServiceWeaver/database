@@ -89,8 +89,8 @@ func (b *Branch) Commit(ctx context.Context) error {
 	return nil
 }
 
-func (b *Branch) UpdateReqId(ctx context.Context) error {
-	return b.clonedDdl.updateCounter(ctx)
+func (b *Branch) IncrementReqId(ctx context.Context) error {
+	return b.clonedDdl.incrementCounter(ctx)
 }
 
 // For each two branch, compare each table and get rowDiffs for each table
@@ -120,14 +120,14 @@ func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n i
 
 // For each two branch, compare each table and get rowDiffs for each table at each request id
 func (b *Brancher) ComputeDiffPerReq(ctx context.Context, A *Branch, B *Branch, N int) ([]map[string]*Diff, error) {
-	var ReqMaps []map[string]*Diff
+	var reqMaps []map[string]*Diff
 	for n := 0; n < N; n++ {
 		diffs, err := b.ComputeDiffAtN(ctx, A, B, n)
 		if err != nil {
 			return nil, err
 		}
-		ReqMaps = append(ReqMaps, diffs)
+		reqMaps = append(reqMaps, diffs)
 	}
 
-	return ReqMaps, nil
+	return reqMaps, nil
 }
