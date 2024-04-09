@@ -53,8 +53,30 @@ func (s *sideBySideDiffFormatter) format() error {
 	fmt.Fprintln(s.w, strings.ToUpper(s.tableName))
 
 	// col names
+	writeRow("│", func(j, w int) string {
+		s := strings.ToUpper(controlPrefix)
+		if j != 0 {
+			s = ""
+		}
+		return fmt.Sprintf(" %-*s ", w, s)
+	})
+	writeRow("│", func(j, w int) string {
+		s := strings.ToUpper(baselinePrefix)
+		if j != 0 {
+			s = ""
+		}
+		return fmt.Sprintf(" %-*s ", w, s)
+	})
+	writeRow("\n", func(j, w int) string {
+		s := strings.ToUpper(experimentalPrefix)
+		if j != 0 {
+			s = ""
+		}
+		return fmt.Sprintf(" %-*s ", w, s)
+	})
+
 	for i := 0; i < 3; i++ {
-		end := "|"
+		end := "│"
 		if i == 2 {
 			end = "\n"
 		}
@@ -70,14 +92,16 @@ func (s *sideBySideDiffFormatter) format() error {
 
 		texts := [][]atom{s.control[r], s.baseline[r], s.experimental[r]}
 		for i, text := range texts {
-			end := "|"
+			end := "│"
 			if i == 2 {
 				end = "\n"
 			}
 			writeRow(end, func(j, w int) string {
-				a := atom{}
+				var a atom
 				if len(text) > 0 {
 					a = text[j]
+				} else {
+					a = atom{S: "-", Color: "", Bold: true}
 				}
 				s := a.String()
 				return fmt.Sprintf(" %-*s ", w-len(a.S)+len(s), a)
