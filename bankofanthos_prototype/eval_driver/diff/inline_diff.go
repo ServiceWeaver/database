@@ -102,6 +102,8 @@ func (i *inlineFormatter) format() error {
 					a.S = prefix[p]
 				} else if len(text) > 0 {
 					a = text[j-1]
+				} else {
+					a = atom{S: "-", Color: "", Bold: true}
 				}
 				s := a.String()
 				return fmt.Sprintf(" %-*s ", w-len(a.S)+len(s), a)

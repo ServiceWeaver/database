@@ -74,27 +74,27 @@ func TestInlineDiffFormat(t *testing.T) {
 ├───┼────┼─────────────────┼──────┤
 │ = │ 0  │ UNERA9rI2cvTK4U │ A    │
 │ < │ 0  │ UNERA9rI2cvTK4U │ A    │
-│ > │    │                 │      │
+│ > │ -  │ -               │ -    │
 ├───┼────┼─────────────────┼──────┤
 │ = │ 1  │ pL              │ BB   │
 │ < │ 1  │ pL              │ BB   │
 │ > │ 1  │ pL              │ B    │
 ├───┼────┼─────────────────┼──────┤
 │ = │ 2  │ SiOW4eQ         │ C    │
-│ < │    │                 │      │
+│ < │ -  │ -               │ -    │
 │ > │ 2  │ SiOW4eQ         │ C    │
 ├───┼────┼─────────────────┼──────┤
 │ = │ 3  │ jKsRdMxCv       │ D    │
-│ < │    │                 │      │
-│ > │    │                 │      │
+│ < │ -  │ -               │ -    │
+│ > │ -  │ -               │ -    │
 ├───┼────┼─────────────────┼──────┤
-│ = │    │                 │      │
+│ = │ -  │ -               │ -    │
 │ < │ 4  │ gltBHYVJQV      │ E    │
 │ > │ 4  │ orCMYJxL8       │ E    │
 ├───┼────┼─────────────────┼──────┤
 │ = │ 5  │ gvMTIQB         │ F    │
 │ < │ 5  │ gvMTIQB         │ FFFF │
-│ > │    │                 │      │
+│ > │ -  │ -               │ -    │
 ╰───┴────┴─────────────────┴──────╯
 `
 	if diff := cmp.Diff(expectedString[1:], plainText); diff != "" {
@@ -111,13 +111,14 @@ func TestSideBySideDiffFormat(t *testing.T) {
 
 	expectedString := `
 USER
- ID  PASSWORD         NAME | ID  PASSWORD         NAME | ID  PASSWORD         NAME 
- 0   UNERA9rI2cvTK4U  A    | 0   UNERA9rI2cvTK4U  A    |                           
- 1   pL               BB   | 1   pL               BB   | 1   pL               B    
-                           | 2   SiOW4eQ          C    | 2   SiOW4eQ          C    
-                           | 3   jKsRdMxCv        D    |                           
- 4   gltBHYVJQV       E    |                           | 4   orCMYJxL8        E    
- 5   gvMTIQB          FFFF | 5   gvMTIQB          F    |                           
+ <                         │ =                         │ >                         
+ ID  PASSWORD         NAME │ ID  PASSWORD         NAME │ ID  PASSWORD         NAME 
+ 0   UNERA9rI2cvTK4U  A    │ 0   UNERA9rI2cvTK4U  A    │ -   -                -    
+ 1   pL               BB   │ 1   pL               BB   │ 1   pL               B    
+ -   -                -    │ 2   SiOW4eQ          C    │ 2   SiOW4eQ          C    
+ -   -                -    │ 3   jKsRdMxCv        D    │ -   -                -    
+ 4   gltBHYVJQV       E    │ -   -                -    │ 4   orCMYJxL8        E    
+ 5   gvMTIQB          FFFF │ 5   gvMTIQB          F    │ -   -                -    
 `
 
 	plainText := removeColorCodes(output)
