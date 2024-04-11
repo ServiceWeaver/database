@@ -25,19 +25,22 @@ var (
 	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
 	responseType          = "response"
+	reqPath               = "../tester/reqlog.json"
 )
 
 // requestsPorts generates traffic pattern, each request will be directed to either baseline service port
 // or experimental service port
-func requestsPorts(l service.ListOfReqs, numOfRuns int, baseListenPort, expListenPort string) ([][]string, error) {
-	reqCount := len(l())
+func requestsPorts(numOfRuns int, baseListenPort, expListenPort, origListenPort string) (*service.Request, [][]string, error) {
 	allPorts := [][]string{}
-
+	request, err := service.NewRequest(reqPath, origListenPort)
+	if err != nil {
+		return nil, nil, err
+	}
 	for r := 0; r < numOfRuns; r++ {
 		ports := []string{}
 		if r <= 1 {
 			// for all baseline traffic
-			for i := 0; i < reqCount; i++ {
+			for i := 0; i < request.Count; i++ {
 				ports = append(ports, baseListenPort)
 			}
 			allPorts = append(allPorts, ports)
@@ -45,7 +48,7 @@ func requestsPorts(l service.ListOfReqs, numOfRuns int, baseListenPort, expListe
 
 		if r == 2 {
 			// for all experimental traffic
-			for i := 0; i < reqCount; i++ {
+			for i := 0; i < request.Count; i++ {
 				ports = append(ports, expListenPort)
 			}
 			allPorts = append(allPorts, ports)
@@ -53,10 +56,10 @@ func requestsPorts(l service.ListOfReqs, numOfRuns int, baseListenPort, expListe
 
 		if r == 3 {
 			// half to baseline, half to experimental
-			for i := 0; i < reqCount/2; i++ {
+			for i := 0; i < request.Count/2; i++ {
 				ports = append(ports, baseListenPort)
 			}
-			for i := reqCount / 2; i < reqCount; i++ {
+			for i := request.Count / 2; i < request.Count; i++ {
 				ports = append(ports, expListenPort)
 			}
 			allPorts = append(allPorts, ports)
@@ -64,17 +67,17 @@ func requestsPorts(l service.ListOfReqs, numOfRuns int, baseListenPort, expListe
 
 		if r == 4 {
 			// half to experimental, half to baseline
-			for i := 0; i < reqCount/2; i++ {
+			for i := 0; i < request.Count/2; i++ {
 				ports = append(ports, expListenPort)
 			}
-			for i := reqCount / 2; i < reqCount; i++ {
+			for i := request.Count / 2; i < request.Count; i++ {
 				ports = append(ports, baseListenPort)
 			}
 			allPorts = append(allPorts, ports)
 		}
 	}
 
-	return allPorts, nil
+	return request, allPorts, nil
 }
 
 func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
@@ -88,7 +91,7 @@ func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
 	return &service.Database{Name: databaseUrl[posS+1 : posE], Url: databaseUrl}, nil
 }
 
-func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclone.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string) (*service.Service, error) {
+func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclone.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string, req *service.Request) (*service.Service, error) {
 	branchMap := map[string]*dbclone.Branch{}
 	for name, brancher := range branchers {
 		b, err := brancher.Branch(ctx, namespace)
@@ -104,11 +107,12 @@ func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclo
 
 		branchMap[name] = b
 	}
-	trail, err := service.Init(runCnt, listenPorts, prodServices, reqPorts, branchMap)
+
+	trail, err := service.Init(runCnt, listenPorts, prodServices, reqPorts, branchMap, req)
 	if err != nil {
 		log.Panicf("Init service failed: %v", err)
 	}
-	trail.Run(ctx, service.ListOfReqs1)
+	trail.Run(ctx)
 	return trail, nil
 }
 
@@ -196,10 +200,10 @@ func main() {
 	ctx := context.Background()
 	runCnt := 0
 
-	// generate traffic patterns
-	allPorts, err := requestsPorts(service.ListOfReqs1, 5, baseListenPort, expListenPort)
+	// generate traffic patterns for request
+	request, allPorts, err := requestsPorts(5, baseListenPort, expListenPort, origListenPort)
 	if err != nil {
-		log.Panicf("Failed to generate traffic patterns: %v", err)
+		log.Panicf("Failed to get new request: %v", err)
 	}
 
 	branchers := map[string]*dbclone.Brancher{}
@@ -213,7 +217,7 @@ func main() {
 		branchers[prodDb.Name] = brancher
 	}
 
-	baselineService, err := runTrail(ctx, "B", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
+	baselineService, err := runTrail(ctx, "B", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
@@ -230,7 +234,7 @@ func main() {
 
 	runCnt += 1
 
-	baselineService2, err := runTrail(ctx, "BTWO", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt])
+	baselineService2, err := runTrail(ctx, "BTWO", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
@@ -251,7 +255,7 @@ func main() {
 
 	// run experimental service
 	runCnt += 1
-	experientalService, err := runTrail(ctx, "E", branchers, runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt])
+	experientalService, err := runTrail(ctx, "E", branchers, runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
@@ -271,11 +275,11 @@ func main() {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	printDbDiffs(ctx, branchers, "E", baselineService.Branches, experientalService.Branches, inlineDiff, len(service.ListOfReqs1()))
+	printDbDiffs(ctx, branchers, "E", baselineService.Branches, experientalService.Branches, inlineDiff, request.Count)
 
 	// run requests on both baseline and experiental
 	runCnt += 1
-	b1E1Service, err := runTrail(ctx, "BE", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	b1E1Service, err := runTrail(ctx, "BE", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
@@ -295,11 +299,11 @@ func main() {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	printDbDiffs(ctx, branchers, "BE", baselineService.Branches, b1E1Service.Branches, inlineDiff, len(service.ListOfReqs1()))
+	printDbDiffs(ctx, branchers, "BE", baselineService.Branches, b1E1Service.Branches, inlineDiff, request.Count)
 
 	// run requests on both experiental and baseline
 	runCnt += 1
-	e1B1Service, err := runTrail(ctx, "EB", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt])
+	e1B1Service, err := runTrail(ctx, "EB", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
@@ -319,7 +323,7 @@ func main() {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	printDbDiffs(ctx, branchers, "EB", baselineService.Branches, e1B1Service.Branches, inlineDiff, len(service.ListOfReqs1()))
+	printDbDiffs(ctx, branchers, "EB", baselineService.Branches, e1B1Service.Branches, inlineDiff, request.Count)
 
 	fmt.Println("Exiting program...")
 }
