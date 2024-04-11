@@ -13,7 +13,7 @@ const reqLog = "reqlog.json" //req log file
 func main() {
 	var counts string
 
-	flag.StringVar(&counts, "counts", "6, 9", "Req count per user, must be > 3, split by,")
+	flag.StringVar(&counts, "counts", "6, 9", "Req count per user, must be >= 3, split by,")
 	flag.Parse()
 
 	var count []int
@@ -36,6 +36,6 @@ func main() {
 	}
 
 	if err := g.generate(); err != nil {
-		log.Panicf("failed to generate requests per user, err=%s", err)
+		log.Panicf("failed to generate requests, err=%s", err)
 	}
 }
