@@ -72,7 +72,7 @@ func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts
 	return service, nil
 }
 
-func (s Service) writeOutput(output, outPath string) error {
+func (s *Service) writeOutput(output, outPath string) error {
 	file, err := os.OpenFile(outPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func (s Service) writeOutput(output, outPath string) error {
 }
 
 // generateConfig creates a config file for each run with snapshot database url
-func (s Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
+func (s *Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
 	configByte, err := os.ReadFile(prodService.ConfigPath)
 	if err != nil {
 		return err
@@ -111,7 +111,7 @@ func (s Service) generateConfig(configPath, listenPort string, prodService ProdS
 	return nil
 }
 
-func (s Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath, logPath string) {
+func (s *Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath, logPath string) {
 	fmt.Printf("Start running service %s, config file %s\n", s.Runs, configPath)
 
 	cmd := exec.Command(binPath)
@@ -140,7 +140,7 @@ func (s Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath
 	}
 }
 
-func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
+func (s *Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	i := 0
 	for {
 		select {
@@ -162,7 +162,7 @@ func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	}
 }
 
-func (s Service) Run(ctx context.Context) {
+func (s *Service) Run(ctx context.Context) {
 	cmdCh := make(chan *exec.Cmd, len(s.ProdServices))
 	upCh := make(chan bool, len(s.ProdServices))
 	var wg sync.WaitGroup
@@ -184,7 +184,7 @@ func (s Service) Run(ctx context.Context) {
 	fmt.Println("Finished running service")
 }
 
-func (s Service) sendHttpReqs(ctx context.Context, client *http.Client, ports []string) error {
+func (s *Service) sendHttpReqs(ctx context.Context, client *http.Client, ports []string) error {
 	for i, req := range s.Request.httpReq {
 		output, err := s.Request.exec(client, &req, ports[i])
 		if err != nil {
@@ -204,7 +204,7 @@ func (s Service) sendHttpReqs(ctx context.Context, client *http.Client, ports []
 	return nil
 }
 
-func (s Service) sendRequests(ctx context.Context, upCh chan bool) error {
+func (s *Service) sendRequests(ctx context.Context, upCh chan bool) error {
 	options := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}

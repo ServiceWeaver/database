@@ -13,22 +13,17 @@ import (
 type Request struct {
 	origPort string
 	Count    int
-	httpReq  []httpReq
+	httpReq  []HttpReq
 }
 
-type metadata struct {
-	ReqCount int `json:"ReqCount"`
+type ReqJson struct {
+	HttpReqs []HttpReq
 }
 
-type jsonFormat struct {
-	HttpReqs []httpReq `json:"HttpReqs"`
-	Metadata metadata  `json:"Metadata"`
-}
-
-type httpReq struct {
-	Body   url.Values `json:"Body"`
-	Method string     `json:"Method"`
-	Url    string     `json:"Url"`
+type HttpReq struct {
+	Body   url.Values
+	Method string
+	Url    string
 }
 
 func NewRequest(reqPath string, origPort string) (*Request, error) {
@@ -37,16 +32,16 @@ func NewRequest(reqPath string, origPort string) (*Request, error) {
 		return nil, fmt.Errorf("error reading log file, err=%s", err)
 	}
 
-	var data jsonFormat
+	var data ReqJson
 	err = json.Unmarshal(jsonData, &data)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshaling json, err=%s", err)
 	}
 
-	return &Request{origPort: origPort, Count: data.Metadata.ReqCount, httpReq: data.HttpReqs}, nil
+	return &Request{origPort: origPort, Count: len(data.HttpReqs), httpReq: data.HttpReqs}, nil
 }
 
-func (r *Request) exec(client *http.Client, h *httpReq, port string) (string, error) {
+func (r *Request) exec(client *http.Client, h *HttpReq, port string) (string, error) {
 	updatedUrl := strings.ReplaceAll(h.Url, r.origPort, port)
 	req, err := http.NewRequest(h.Method, updatedUrl, strings.NewReader(h.Body.Encode()))
 	if err != nil {

@@ -25,12 +25,11 @@ var (
 	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
 	responseType          = "response"
-	reqPath               = "../tester/reqlog.json"
 )
 
 // requestsPorts generates traffic pattern, each request will be directed to either baseline service port
 // or experimental service port
-func requestsPorts(numOfRuns int, baseListenPort, expListenPort, origListenPort string) (*service.Request, [][]string, error) {
+func requestsPorts(numOfRuns int, baseListenPort, expListenPort, origListenPort, reqPath string) (*service.Request, [][]string, error) {
 	allPorts := [][]string{}
 	request, err := service.NewRequest(reqPath, origListenPort)
 	if err != nil {
@@ -150,12 +149,13 @@ func printDbDiffs(ctx context.Context, branchers map[string]*dbclone.Brancher, r
 
 func main() {
 	// parse flags
-	var origListenPort, expListenPort, baseListenPort, dbUrls string
+	var origListenPort, expListenPort, baseListenPort, dbUrls, reqPath string
 	var dropClonedTables, inlineDiff bool
 
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
 	flag.StringVar(&baseListenPort, "expListenPort", "9001", "Listen port for experimental service.")
 	flag.StringVar(&expListenPort, "baseListenPort", "9002", "Listen port for baseline service.")
+	flag.StringVar(&reqPath, "reqPath", "../tester/reqlog.json", "Requests for eval to run.")
 	flag.StringVar(&dbUrls, "dbUrls", "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable,postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable", "database urls used for app; split by ,")
 	flag.BoolVar(&dropClonedTables, "dropClonedTables", true, "Drop cloned tables at the end of eval run, only set false for investigation purpose")
 	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or not")
@@ -201,7 +201,7 @@ func main() {
 	runCnt := 0
 
 	// generate traffic patterns for request
-	request, allPorts, err := requestsPorts(5, baseListenPort, expListenPort, origListenPort)
+	request, allPorts, err := requestsPorts(5, baseListenPort, expListenPort, origListenPort, reqPath)
 	if err != nil {
 		log.Panicf("Failed to get new request: %v", err)
 	}
