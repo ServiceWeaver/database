@@ -22,6 +22,7 @@ var (
 	configPath = "configs/"
 	logPath    = "logs/"
 	outPath    = "out/"
+	reqPath    = "../tester/reqlog.json"
 )
 
 // ProdService defines binary will be running in prod
@@ -41,9 +42,10 @@ type Service struct {
 	Branches     map[string]*dbclone.Branch
 
 	ReqPorts []string
+	Request  *Request
 }
 
-func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, branches map[string]*dbclone.Branch) (*Service, error) {
+func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, branches map[string]*dbclone.Branch, request *Request) (*Service, error) {
 	service := &Service{
 		Runs:         fmt.Sprintf("%d", curRun),
 		ListenPorts:  listenPorts,
@@ -52,6 +54,7 @@ func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts
 		ProdServices: prodServices,
 		Branches:     branches,
 		ReqPorts:     reqPorts,
+		Request:      request,
 	}
 
 	for i := 0; i < len(prodServices); i++ {
@@ -69,7 +72,7 @@ func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts
 	return service, nil
 }
 
-func (s Service) writeOutput(output, outPath string) error {
+func (s *Service) writeOutput(output, outPath string) error {
 	file, err := os.OpenFile(outPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -85,7 +88,7 @@ func (s Service) writeOutput(output, outPath string) error {
 }
 
 // generateConfig creates a config file for each run with snapshot database url
-func (s Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
+func (s *Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
 	configByte, err := os.ReadFile(prodService.ConfigPath)
 	if err != nil {
 		return err
@@ -108,7 +111,7 @@ func (s Service) generateConfig(configPath, listenPort string, prodService ProdS
 	return nil
 }
 
-func (s Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath, logPath string) {
+func (s *Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath, logPath string) {
 	fmt.Printf("Start running service %s, config file %s\n", s.Runs, configPath)
 
 	cmd := exec.Command(binPath)
@@ -135,11 +138,9 @@ func (s Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	return
 }
 
-func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
+func (s *Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	i := 0
 	for {
 		select {
@@ -161,7 +162,7 @@ func (s Service) stop(cmdCh chan *exec.Cmd, runs int) {
 	}
 }
 
-func (s Service) Run(ctx context.Context, r ListOfReqs) {
+func (s *Service) Run(ctx context.Context) {
 	cmdCh := make(chan *exec.Cmd, len(s.ProdServices))
 	upCh := make(chan bool, len(s.ProdServices))
 	var wg sync.WaitGroup
@@ -173,21 +174,25 @@ func (s Service) Run(ctx context.Context, r ListOfReqs) {
 		}(prodService.Bin, s.ConfigPaths[i], i)
 	}
 
-	s.sendRequests(ctx, upCh, r)
+	err := s.sendRequests(ctx, upCh)
+	if err != nil {
+		log.Panicf("failed to send req, err=%s", err)
+	}
 	go s.stop(cmdCh, len(s.ProdServices))
 	wg.Wait()
 
 	fmt.Println("Finished running service")
 }
 
-func (s Service) sendListOfReqs(ctx context.Context, client http.Client, rFunc ListOfReqs, ports []string) error {
-	reqs := rFunc()
-	for i, r := range reqs {
-		output, err := req(client, ports[i], r)
+func (s *Service) sendHttpReqs(ctx context.Context, client *http.Client, ports []string) error {
+	for i, req := range s.Request.httpReq {
+		output, err := s.Request.exec(client, &req, ports[i])
 		if err != nil {
 			return err
 		}
+
 		s.writeOutput(output, s.OutputPath)
+
 		// update req id
 		for _, branch := range s.Branches {
 			if err := branch.IncrementReqId(ctx); err != nil {
@@ -199,7 +204,7 @@ func (s Service) sendListOfReqs(ctx context.Context, client http.Client, rFunc L
 	return nil
 }
 
-func (s Service) sendRequests(ctx context.Context, upCh chan bool, r ListOfReqs) error {
+func (s *Service) sendRequests(ctx context.Context, upCh chan bool) error {
 	options := cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	}
@@ -216,7 +221,7 @@ func (s Service) sendRequests(ctx context.Context, upCh chan bool, r ListOfReqs)
 			i++
 			if i == len(s.ConfigPaths) {
 				fmt.Println("Start sending requests")
-				err = s.sendListOfReqs(ctx, client, r, s.ReqPorts)
+				err := s.sendHttpReqs(ctx, &client, s.ReqPorts)
 				if err != nil {
 					return err
 				}
