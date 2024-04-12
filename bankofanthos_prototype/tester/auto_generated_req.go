@@ -62,12 +62,10 @@ func randIntn(min, max int) int {
 }
 
 func (g *generator) signUp() (*user, error) {
-	var (
-		username  = randStrL(3, 8)
-		password  = randStrL(3, 8)
-		firstname = randStrL(3, 8)
-		lastname  = randStrL(3, 8)
-	)
+	username := randStrL(3, 8)
+	password := randStrL(3, 8)
+	firstname := randStrL(3, 8)
+	lastname := randStrL(3, 8)
 
 	params := url.Values{}
 	params.Add("username", username)
@@ -113,9 +111,7 @@ func (g *generator) logout() error {
 }
 
 func (g *generator) deposit(user *user) error {
-	var (
-		amount = randIntL(1, 6)
-	)
+	amount := randIntL(1, 6)
 	user.Balance += amount
 
 	params := url.Values{}
@@ -132,9 +128,8 @@ func (g *generator) deposit(user *user) error {
 }
 
 func (g *generator) send(user *user) error {
-	var (
-		amount = rand.Intn(user.Balance + 1)
-	)
+	amount := rand.Intn(user.Balance + 1)
+
 	user.Balance -= amount
 
 	params := url.Values{}
