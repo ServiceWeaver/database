@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbbranch"
 
 	"golang.org/x/net/publicsuffix"
 )
@@ -39,13 +39,13 @@ type Service struct {
 	OutputPath   string
 	LogPath      string
 	ProdServices []ProdService
-	Branches     map[string]*dbclone.Branch
+	Branches     map[string]*dbbranch.Branch
 
 	ReqPorts []string
 	Request  *Request
 }
 
-func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, branches map[string]*dbclone.Branch, request *Request) (*Service, error) {
+func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, branches map[string]*dbbranch.Branch, request *Request) (*Service, error) {
 	service := &Service{
 		Runs:         fmt.Sprintf("%d", curRun),
 		ListenPorts:  listenPorts,

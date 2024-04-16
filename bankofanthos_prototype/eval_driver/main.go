@@ -8,28 +8,24 @@ import (
 	"os"
 	"strings"
 
-	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbbranch"
 	"bankofanthos_prototype/eval_driver/diff"
 	"bankofanthos_prototype/eval_driver/service"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-var (
-	v1Bin                 = "./../bankofanthos/bankofanthos"
-	v2Bin                 = "./../bankofanthos/bankofanthos"
+const (
 	configPath            = "configs/"
 	logPath               = "logs/"
 	outPath               = "out/"
-	v1Config              = "../bankofanthos/weaver.toml"
-	v2Config              = "../bankofanthos/weaver_experimental.toml"
 	nonDeterministicField = "nondeterministic/"
 	responseType          = "response"
 )
 
-// requestsPorts generates traffic pattern, each request will be directed to either baseline service port
-// or experimental service port
-func requestsPorts(numOfRuns int, baseListenPort, expListenPort, origListenPort, reqPath string) (*service.Request, [][]string, error) {
+// requestsPorts generates traffic pattern, each request will be directed to either v1 service port
+// or v2 service port
+func requestsPorts(numOfRuns int, v1Port, v2Port, origListenPort, reqPath string) (*service.Request, [][]string, error) {
 	allPorts := [][]string{}
 	request, err := service.NewRequest(reqPath, origListenPort)
 	if err != nil {
@@ -38,39 +34,39 @@ func requestsPorts(numOfRuns int, baseListenPort, expListenPort, origListenPort,
 	for r := 0; r < numOfRuns; r++ {
 		ports := []string{}
 		if r <= 1 {
-			// for all baseline traffic
+			// for all v1 traffic
 			for i := 0; i < request.Count; i++ {
-				ports = append(ports, baseListenPort)
+				ports = append(ports, v1Port)
 			}
 			allPorts = append(allPorts, ports)
 		}
 
 		if r == 2 {
-			// for all experimental traffic
+			// for all v2 traffic
 			for i := 0; i < request.Count; i++ {
-				ports = append(ports, expListenPort)
+				ports = append(ports, v2Port)
 			}
 			allPorts = append(allPorts, ports)
 		}
 
 		if r == 3 {
-			// half to baseline, half to experimental
+			// half to v1, half to v2
 			for i := 0; i < request.Count/2; i++ {
-				ports = append(ports, baseListenPort)
+				ports = append(ports, v1Port)
 			}
 			for i := request.Count / 2; i < request.Count; i++ {
-				ports = append(ports, expListenPort)
+				ports = append(ports, v2Port)
 			}
 			allPorts = append(allPorts, ports)
 		}
 
 		if r == 4 {
-			// half to experimental, half to baseline
+			// half to v2, half to v1
 			for i := 0; i < request.Count/2; i++ {
-				ports = append(ports, expListenPort)
+				ports = append(ports, v2Port)
 			}
 			for i := request.Count / 2; i < request.Count; i++ {
-				ports = append(ports, baseListenPort)
+				ports = append(ports, v1Port)
 			}
 			allPorts = append(allPorts, ports)
 		}
@@ -90,8 +86,8 @@ func getDatabaseFromURL(databaseUrl string) (*service.Database, error) {
 	return &service.Database{Name: databaseUrl[posS+1 : posE], Url: databaseUrl}, nil
 }
 
-func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclone.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string, req *service.Request) (*service.Service, error) {
-	branchMap := map[string]*dbclone.Branch{}
+func runTrail(ctx context.Context, namespace string, branchers map[string]*dbbranch.Brancher, runCnt int, listenPorts []string, prodServices []service.ProdService, reqPorts []string, req *service.Request) (*service.Service, error) {
+	branchMap := map[string]*dbbranch.Branch{}
 	for name, brancher := range branchers {
 		b, err := brancher.Branch(ctx, namespace)
 		if err != nil {
@@ -115,7 +111,7 @@ func runTrail(ctx context.Context, namespace string, branchers map[string]*dbclo
 	return trail, nil
 }
 
-func printDbDiffs(ctx context.Context, branchers map[string]*dbclone.Brancher, runName string, branchA, branchB map[string]*dbclone.Branch, inlineDiff bool, reqCnt int) {
+func printDbDiffs(ctx context.Context, branchers map[string]*dbbranch.Brancher, runName string, branchA, branchB map[string]*dbbranch.Branch, inlineDiff bool, reqCnt int) {
 	f, err := os.Create(fmt.Sprintf("%sDiffPerReq_%s", outPath, runName))
 	if err != nil {
 		log.Panicf("Failed to create file: %v", err)
@@ -149,15 +145,19 @@ func printDbDiffs(ctx context.Context, branchers map[string]*dbclone.Brancher, r
 
 func main() {
 	// parse flags
-	var origListenPort, expListenPort, baseListenPort, dbUrls, reqPath string
-	var dropClonedTables, inlineDiff bool
+	var origListenPort, v2Port, v1Port, dbUrls, reqPath, v1Bin, v2Bin, v1Config, v2Config string
+	var deleteBranches, inlineDiff bool
 
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
-	flag.StringVar(&baseListenPort, "expListenPort", "9001", "Listen port for experimental service.")
-	flag.StringVar(&expListenPort, "baseListenPort", "9002", "Listen port for baseline service.")
+	flag.StringVar(&v1Port, "v1Port", "9001", "Listen port for stable v1 service.")
+	flag.StringVar(&v2Port, "v2Port", "9002", "Listen port for canary v2 service.")
+	flag.StringVar(&v1Bin, "v1Bin", "./../bankofanthos/bankofanthos", "Stable v1 binary")
+	flag.StringVar(&v2Bin, "v2Bin", "./../bankofanthos/bankofanthos", "Canary v2 binary")
+	flag.StringVar(&v1Config, "v1Config", "../bankofanthos/weaver.toml", "Stable v1 config")
+	flag.StringVar(&v2Config, "v2Config", "../bankofanthos/weaver_canary.toml", "Canary v2 config")
 	flag.StringVar(&reqPath, "reqPath", "../tester/reqlog.json", "Requests for eval to run.")
 	flag.StringVar(&dbUrls, "dbUrls", "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable,postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable", "database urls used for app; split by ,")
-	flag.BoolVar(&dropClonedTables, "dropClonedTables", true, "Drop cloned tables at the end of eval run, only set false for investigation purpose")
+	flag.BoolVar(&deleteBranches, "deleteBranches", true, "Delete branches at the end of eval run, only set false for investigation purpose")
 	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or not")
 	flag.Parse()
 
@@ -174,7 +174,7 @@ func main() {
 		}
 	}
 
-	// get prod database
+	// get prod snapshot database
 	urlSlice := strings.Split(dbUrls, ",")
 	prodDbs := map[string]*service.Database{}
 	for _, url := range urlSlice {
@@ -186,12 +186,12 @@ func main() {
 	}
 
 	// get the service running in prod
-	baseProdService := service.ProdService{
+	stableProdService := service.ProdService{
 		ConfigPath: v1Config,
 		ListenPort: origListenPort,
 		Bin:        v1Bin,
 	}
-	experimentalProdService := service.ProdService{
+	canaryProdService := service.ProdService{
 		ConfigPath: v2Config,
 		ListenPort: origListenPort,
 		Bin:        v2Bin,
@@ -199,31 +199,31 @@ func main() {
 
 	ctx := context.Background()
 	runCnt := 0
-
+	totalRun := 5
 	// generate traffic patterns for request
-	request, allPorts, err := requestsPorts(5, baseListenPort, expListenPort, origListenPort, reqPath)
+	request, allPorts, err := requestsPorts(totalRun, v1Port, v2Port, origListenPort, reqPath)
 	if err != nil {
 		log.Panicf("Failed to get new request: %v", err)
 	}
 
-	branchers := map[string]*dbclone.Brancher{}
+	branchers := map[string]*dbbranch.Brancher{}
 	for _, prodDb := range prodDbs {
 		db, err := pgxpool.Connect(ctx, prodDb.Url)
 		if err != nil {
 			log.Panicf("Connect to DB %s failed with %s: %v", prodDb.Name, prodDb.Url, err)
 		}
 		defer db.Close()
-		brancher := dbclone.NewBrancher(db)
+		brancher := dbbranch.NewBrancher(db)
 		branchers[prodDb.Name] = brancher
 	}
 
-	baselineService, err := runTrail(ctx, "B", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], request)
+	controlService, err := runTrail(ctx, "Control", branchers, runCnt, []string{v1Port}, []service.ProdService{stableProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range baselineService.Branches {
+	for _, branch := range controlService.Branches {
 		defer func() {
-			if dropClonedTables {
+			if deleteBranches {
 				err = branch.Delete(ctx)
 				if err != nil {
 					log.Panicf("Delete failed: %v", err)
@@ -234,13 +234,13 @@ func main() {
 
 	runCnt += 1
 
-	baselineService2, err := runTrail(ctx, "BTWO", branchers, runCnt, []string{baseListenPort}, []service.ProdService{baseProdService}, allPorts[runCnt], request)
+	controlService2, err := runTrail(ctx, "ControlTwo", branchers, runCnt, []string{v1Port}, []service.ProdService{stableProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range baselineService2.Branches {
+	for _, branch := range controlService2.Branches {
 		defer func() {
-			if dropClonedTables {
+			if deleteBranches {
 				err = branch.Delete(ctx)
 				if err != nil {
 					log.Panicf("Delete failed: %v", err)
@@ -249,19 +249,20 @@ func main() {
 		}()
 	}
 
-	if err := diff.GetNonDeterministic(baselineService, baselineService2); err != nil {
+	if err := diff.GetNonDeterministic(controlService, controlService2); err != nil {
 		log.Panicf("Get non deterministic error failed: %v", err)
 	}
 
-	// run experimental service
+	// run experimental service, all traffic send to canary binary
 	runCnt += 1
-	experientalService, err := runTrail(ctx, "E", branchers, runCnt, []string{expListenPort}, []service.ProdService{experimentalProdService}, allPorts[runCnt], request)
+	experimentalCanaryNamespace := "E_C"
+	experimentalCanaryService, err := runTrail(ctx, experimentalCanaryNamespace, branchers, runCnt, []string{v2Port}, []service.ProdService{canaryProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range experientalService.Branches {
+	for _, branch := range experimentalCanaryService.Branches {
 		defer func() {
-			if dropClonedTables {
+			if deleteBranches {
 				err = branch.Delete(ctx)
 				if err != nil {
 					log.Panicf("Delete failed: %v", err)
@@ -270,22 +271,23 @@ func main() {
 		}()
 	}
 
-	_, err = diff.OutputEq(baselineService.OutputPath, experientalService.OutputPath, responseType)
+	_, err = diff.OutputEq(controlService.OutputPath, experimentalCanaryService.OutputPath, responseType)
 	if err != nil {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	printDbDiffs(ctx, branchers, "E", baselineService.Branches, experientalService.Branches, inlineDiff, request.Count)
+	printDbDiffs(ctx, branchers, experimentalCanaryNamespace, controlService.Branches, experimentalCanaryService.Branches, inlineDiff, request.Count)
 
-	// run requests on both baseline and experiental
+	// run requests half on stable (v1) half on canary (v2)
 	runCnt += 1
-	b1E1Service, err := runTrail(ctx, "BE", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], request)
+	experimentalSCNamespace := "E_SC"
+	experimentalSCService, err := runTrail(ctx, experimentalSCNamespace, branchers, runCnt, []string{v1Port, v2Port}, []service.ProdService{stableProdService, canaryProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range b1E1Service.Branches {
+	for _, branch := range experimentalSCService.Branches {
 		defer func() {
-			if dropClonedTables {
+			if deleteBranches {
 				err = branch.Delete(ctx)
 				if err != nil {
 					log.Panicf("Delete failed: %v", err)
@@ -294,22 +296,23 @@ func main() {
 		}()
 	}
 
-	_, err = diff.OutputEq(baselineService.OutputPath, b1E1Service.OutputPath, responseType)
+	_, err = diff.OutputEq(controlService.OutputPath, experimentalSCService.OutputPath, responseType)
 	if err != nil {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	printDbDiffs(ctx, branchers, "BE", baselineService.Branches, b1E1Service.Branches, inlineDiff, request.Count)
+	printDbDiffs(ctx, branchers, experimentalSCNamespace, controlService.Branches, experimentalSCService.Branches, inlineDiff, request.Count)
 
-	// run requests on both experiental and baseline
+	// run requests half on canary (v2) half on stable (v1)
 	runCnt += 1
-	e1B1Service, err := runTrail(ctx, "EB", branchers, runCnt, []string{baseListenPort, expListenPort}, []service.ProdService{baseProdService, experimentalProdService}, allPorts[runCnt], request)
+	experimentalCSNamespace := "E_CS"
+	experimentalCSService, err := runTrail(ctx, experimentalCSNamespace, branchers, runCnt, []string{v1Port, v2Port}, []service.ProdService{stableProdService, canaryProdService}, allPorts[runCnt], request)
 	if err != nil {
 		log.Panicf("trail run failed: %v", err)
 	}
-	for _, branch := range e1B1Service.Branches {
+	for _, branch := range experimentalCSService.Branches {
 		defer func() {
-			if dropClonedTables {
+			if deleteBranches {
 				err = branch.Delete(ctx)
 				if err != nil {
 					log.Panicf("Delete failed: %v", err)
@@ -318,12 +321,12 @@ func main() {
 		}()
 	}
 
-	_, err = diff.OutputEq(baselineService.OutputPath, e1B1Service.OutputPath, responseType)
+	_, err = diff.OutputEq(controlService.OutputPath, experimentalCSService.OutputPath, responseType)
 	if err != nil {
 		log.Panicf("Failed to compare two outputs: %v", err)
 	}
 
-	printDbDiffs(ctx, branchers, "EB", baselineService.Branches, e1B1Service.Branches, inlineDiff, request.Count)
+	printDbDiffs(ctx, branchers, experimentalCSNamespace, controlService.Branches, experimentalCSService.Branches, inlineDiff, request.Count)
 
 	fmt.Println("Exiting program...")
 }

@@ -1,5 +1,5 @@
 // This file defines database struct and get database matadata
-package dbclone
+package dbbranch
 
 import (
 	"context"

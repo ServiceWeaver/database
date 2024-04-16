@@ -1,6 +1,6 @@
 // This file creates R+/R-/R' clone database based on database metadata
 
-package dbclone
+package dbbranch
 
 import (
 	"context"

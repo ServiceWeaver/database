@@ -1,7 +1,7 @@
 package diff
 
 import (
-	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbbranch"
 	"fmt"
 	"math/rand"
 	"regexp"
@@ -31,8 +31,8 @@ func randomGenerate(seed int64) string {
 	return builder.String()
 }
 
-var tableDiff = &dbclone.Diff{
-	Left: []*dbclone.Row{
+var tableDiff = &dbbranch.Diff{
+	Control: []*dbbranch.Row{
 		{int32(0), randomGenerate(0), "A"},
 		{int32(1), randomGenerate(1), "BB"},
 		{nil, nil, nil},
@@ -40,7 +40,7 @@ var tableDiff = &dbclone.Diff{
 		{int32(4), randomGenerate(4), "E"},
 		{int32(5), randomGenerate(5), "FFFF"},
 	},
-	Middle: []*dbclone.Row{
+	Baseline: []*dbbranch.Row{
 		{int32(0), randomGenerate(0), "A"},
 		{int32(1), randomGenerate(1), "BB"},
 		{int32(2), randomGenerate(2), "C"},
@@ -48,7 +48,7 @@ var tableDiff = &dbclone.Diff{
 		{nil, nil, nil},
 		{int32(5), randomGenerate(5), "F"},
 	},
-	Right: []*dbclone.Row{
+	Experimental: []*dbbranch.Row{
 		{nil, nil, nil},
 		{int32(1), randomGenerate(1), "B"},
 		{int32(2), randomGenerate(2), "C"},
@@ -60,7 +60,7 @@ var tableDiff = &dbclone.Diff{
 }
 
 func TestInlineDiffFormat(t *testing.T) {
-	output, err := DisplayDiff(map[string]*dbclone.Diff{"user": tableDiff}, true)
+	output, err := DisplayDiff(map[string]*dbbranch.Diff{"user": tableDiff}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestInlineDiffFormat(t *testing.T) {
 }
 
 func TestSideBySideDiffFormat(t *testing.T) {
-	output, err := DisplayDiff(map[string]*dbclone.Diff{"user": tableDiff}, false)
+	output, err := DisplayDiff(map[string]*dbbranch.Diff{"user": tableDiff}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

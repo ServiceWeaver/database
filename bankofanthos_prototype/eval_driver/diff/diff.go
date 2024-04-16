@@ -17,30 +17,28 @@ var (
 	fromFile              = "control"
 	toFile                = "experimental"
 	nonDeterministicField = "nondeterministic/"
-	databaseType          = "database"
 	responseType          = "response"
 )
 
 // checkLine checks each row to find non-deterministic column
-func checkLine(baseline, experimental []string, idx int) ([]*pb.RowInfo, error) {
+func checkLine(control, experimental []string, idx int) ([]*pb.RowInfo, error) {
 	var rowInfos []*pb.RowInfo
-	if len(baseline) != len(experimental) {
+	if len(control) != len(experimental) {
 		return rowInfos, nil
 	}
 	// two versions have different row numbers,no need to check each column
 	for i := 0; i < idx; i++ {
 		// get rid of the first char which is used for diff display
-		baselineCols := strings.Fields(baseline[i][1:])
+		controlCols := strings.Fields(control[i][1:])
 		experimentalCols := strings.Fields(experimental[i][1:])
-		if len(baselineCols) != len(experimentalCols) {
-			fmt.Println("Warning, failed to compare two columns with different fields number")
+		if len(controlCols) != len(experimentalCols) {
 			continue
 		}
 
 		rowInfo := &pb.RowInfo{DiffLineIdx: int64(i)}
 
-		for j := 0; j < len(baselineCols); j++ {
-			if baselineCols[j] != experimentalCols[j] {
+		for j := 0; j < len(controlCols); j++ {
+			if controlCols[j] != experimentalCols[j] {
 				rowInfo.ColNumber = append(rowInfo.ColNumber, int64(j))
 			}
 		}
@@ -89,9 +87,9 @@ func getDiffHelper(result string) (*pb.DiffInfos, error) {
 			diffInfo := &pb.DiffInfo{FromLineNumber: int64(fromLineChangeS), FromLineCnt: int64(fromLineChangeCnt), ToLineNumber: int64(toLineChangeS), ToLineCnt: int64(toLineChangeCnt)}
 
 			if diffInfo.FromLineCnt == diffInfo.ToLineCnt {
-				baseline := diffLines[i+1 : 1+i+fromLineChangeCnt]
+				control := diffLines[i+1 : 1+i+fromLineChangeCnt]
 				experimental := diffLines[1+i+fromLineChangeCnt : 1+i+fromLineChangeCnt*2]
-				rowInfos, err := checkLine(baseline, experimental, int(diffInfo.FromLineCnt))
+				rowInfos, err := checkLine(control, experimental, int(diffInfo.FromLineCnt))
 				if err != nil {
 					return diffInfos, err
 				}
@@ -142,7 +140,7 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 		return err
 	}
 
-	// store baseline diffs protobuf in a file
+	// store control diffs protobuf in a file
 	file, err := os.Create(nonDeterministicField + compareType)
 	if err != nil {
 		return err
@@ -156,9 +154,9 @@ func getNonDeterministicInfo(path1, path2 string, compareType string) error {
 	return nil
 }
 
-func GetNonDeterministic(baselineService1, baselineService2 *service.Service) error {
+func GetNonDeterministic(controlService1, controlService2 *service.Service) error {
 	// get response diff
-	err := getNonDeterministicInfo(baselineService1.OutputPath, baselineService2.OutputPath, responseType)
+	err := getNonDeterministicInfo(controlService1.OutputPath, controlService2.OutputPath, responseType)
 	if err != nil {
 		return err
 	}
@@ -179,13 +177,13 @@ func OutputEq(path1 string, path2 string, compareType string) (bool, error) {
 		return false, err
 	}
 
-	baselineDiffStr, err := os.ReadFile(nonDeterministicField + compareType)
+	controlDiffStr, err := os.ReadFile(nonDeterministicField + compareType)
 	if err != nil {
 		return false, err
 	}
 
-	baselineDiff := &pb.DiffInfos{}
-	err = proto.Unmarshal(baselineDiffStr, baselineDiff)
+	controlDiff := &pb.DiffInfos{}
+	err = proto.Unmarshal(controlDiffStr, controlDiff)
 	if err != nil {
 		return false, err
 	}
@@ -211,7 +209,7 @@ func OutputEq(path1 string, path2 string, compareType string) (bool, error) {
 		return false, err
 	}
 
-	if proto.Equal(baselineDiff, experimentalDiff) {
+	if proto.Equal(controlDiff, experimentalDiff) {
 		return true, nil
 	}
 

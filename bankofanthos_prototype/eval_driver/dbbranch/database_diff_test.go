@@ -1,4 +1,4 @@
-package dbclone
+package dbbranch
 
 import (
 	"context"
@@ -403,7 +403,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		}
 		// order is {APlusOnly, BPlusOnly, APlusBPlus, AMinusOnly, BMinusOnly, AMinusBMinus}
 		expectedRowDiffs := &Diff{
-			Left: []*Row{
+			Control: []*Row{
 				{int32(2), "B"}, // A+
 				{nil, nil},      // B+
 				{int32(3), "C"}, //A+B+
@@ -411,7 +411,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 				{int32(1), "A"}, //B-
 				{nil, nil},      // A-B-
 			},
-			Middle: []*Row{
+			Baseline: []*Row{
 				{nil, nil},      // A+
 				{nil, nil},      // B+
 				{nil, nil},      //A+B+
@@ -419,7 +419,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 				{int32(1), "A"}, //B-
 				{int32(0), "O"}, // A-B-
 			},
-			Right: []*Row{
+			Experimental: []*Row{
 				{nil, nil},      // A+
 				{int32(1), "D"}, // B+
 				{int32(3), "C"}, //A+B+
@@ -536,7 +536,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		}
 
 		expectedRowDiffs := &Diff{
-			Left: []*Row{
+			Control: []*Row{
 				{int32(0), "O"},
 				{int32(1), "A"},
 				{nil, nil},
@@ -549,7 +549,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 				{int32(9), "I"},
 				{int32(10), "J"},
 			},
-			Middle: []*Row{
+			Baseline: []*Row{
 				{int32(0), "O"},
 				{int32(1), "A"},
 				{int32(2), "B"},
@@ -562,7 +562,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 				{nil, nil},
 				{nil, nil},
 			},
-			Right: []*Row{
+			Experimental: []*Row{
 				{nil, nil},
 				{int32(1), "AA"},
 				{int32(2), "B"},
@@ -679,17 +679,17 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		}
 
 		expectedRowDiffs := &Diff{
-			Left: []*Row{
+			Control: []*Row{
 				{int32(1), "A"},
 				{nil, nil},
 				{int32(3), "CC"},
 			},
-			Middle: []*Row{
+			Baseline: []*Row{
 				{int32(1), "A"},
 				{int32(2), "B"},
 				{int32(3), "C"},
 			},
-			Right: []*Row{
+			Experimental: []*Row{
 				{int32(1), "AA"},
 				{int32(2), "B"},
 				{int32(3), string("C")},
