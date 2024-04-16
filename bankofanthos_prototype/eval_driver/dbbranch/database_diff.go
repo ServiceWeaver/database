@@ -1,4 +1,4 @@
-package dbclone
+package dbbranch
 
 import (
 	"context"
@@ -13,14 +13,14 @@ import (
 
 type Row []any
 
-// Diff shows rows for 3 way diff. Left, Middle and Right are the same length
+// Diff shows rows for 3 way diff. Control, Baseline and Experimental are the same length
 // each corresponding position is one row for one way diff.
 // if the row is not exists, value will be nil.
 type Diff struct {
-	Left     []*Row // control
-	Middle   []*Row // baseline
-	Right    []*Row // experimental
-	ColNames []string
+	Control      []*Row // control
+	Baseline     []*Row // baseline
+	Experimental []*Row // experimental
+	ColNames     []string
 }
 
 type diffType int
@@ -302,7 +302,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	nilRow := make([]any, len(colNames))
 
 	nilSlices := d.fillRowSlices(nilRow, len(aPlusRows))
-	aPlusDiff := &Diff{Left: aPlusRows, Middle: nilSlices, Right: nilSlices, ColNames: colNames}
+	aPlusDiff := &Diff{Control: aPlusRows, Baseline: nilSlices, Experimental: nilSlices, ColNames: colNames}
 	rowDiffs[APlusOnly] = aPlusDiff
 
 	// A+ intersect B+
@@ -318,7 +318,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	views = append(views, aPlusBPlus)
 
 	nilSlices = d.fillRowSlices(nilRow, len(aPlusBPlusRows))
-	aPlusBPlusRowsRowDiff := &Diff{Left: aPlusBPlusRows, Middle: nilSlices, Right: aPlusBPlusRows, ColNames: colNames}
+	aPlusBPlusRowsRowDiff := &Diff{Control: aPlusBPlusRows, Baseline: nilSlices, Experimental: aPlusBPlusRows, ColNames: colNames}
 	rowDiffs[APlusBPlus] = aPlusBPlusRowsRowDiff
 
 	// B+ - A+
@@ -334,7 +334,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	views = append(views, bPlusOnly)
 
 	nilSlices = d.fillRowSlices(nilRow, len(bPlusRows))
-	bPlusDiff := &Diff{Left: nilSlices, Middle: nilSlices, Right: bPlusRows, ColNames: colNames}
+	bPlusDiff := &Diff{Control: nilSlices, Baseline: nilSlices, Experimental: bPlusRows, ColNames: colNames}
 	rowDiffs[BPlusOnly] = bPlusDiff
 
 	// B- - A-
@@ -349,7 +349,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	views = append(views, bMinusOnly)
 
 	nilSlices = d.fillRowSlices(nilRow, len(bMinusRows))
-	bMinusDiff := &Diff{Left: bMinusRows, Middle: bMinusRows, Right: nilSlices, ColNames: colNames}
+	bMinusDiff := &Diff{Control: bMinusRows, Baseline: bMinusRows, Experimental: nilSlices, ColNames: colNames}
 	rowDiffs[BMinusOnly] = bMinusDiff
 
 	// B- intersect A-
@@ -363,7 +363,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, aMinusBMinus)
 	nilSlices = d.fillRowSlices(nilRow, len(aMinusbMinusRows))
-	aMinusbMinusDiff := &Diff{Left: nilSlices, Middle: aMinusbMinusRows, Right: nilSlices, ColNames: colNames}
+	aMinusbMinusDiff := &Diff{Control: nilSlices, Baseline: aMinusbMinusRows, Experimental: nilSlices, ColNames: colNames}
 	rowDiffs[AMinusBMinus] = aMinusbMinusDiff
 
 	// A- - B-
@@ -377,7 +377,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, aMinusOnly)
 	nilSlices = d.fillRowSlices(nilRow, len(aMinusRows))
-	aMinusDiff := &Diff{Left: nilSlices, Middle: aMinusRows, Right: aMinusRows, ColNames: colNames}
+	aMinusDiff := &Diff{Control: nilSlices, Baseline: aMinusRows, Experimental: aMinusRows, ColNames: colNames}
 	rowDiffs[AMinusOnly] = aMinusDiff
 
 	// drop all views in reverse order because of dependency
@@ -390,9 +390,9 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	diff := &Diff{ColNames: colNames}
 	diffTypes := []diffType{APlusOnly, BPlusOnly, APlusBPlus, AMinusOnly, BMinusOnly, AMinusBMinus}
 	for _, d := range diffTypes {
-		diff.Left = append(diff.Left, rowDiffs[d].Left...)
-		diff.Middle = append(diff.Middle, rowDiffs[d].Middle...)
-		diff.Right = append(diff.Right, rowDiffs[d].Right...)
+		diff.Control = append(diff.Control, rowDiffs[d].Control...)
+		diff.Baseline = append(diff.Baseline, rowDiffs[d].Baseline...)
+		diff.Experimental = append(diff.Experimental, rowDiffs[d].Experimental...)
 	}
 
 	return diff, nil
@@ -447,7 +447,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, bMinusAMinus, aMinusBMinus, aMinusIntersectBMinus)
 
-	// Left: A+, B- - A-
+	// Control: A+, B- - A-
 	leftSideView, err := d.unionViews(ctx, aPlus, bMinusAMinus, "leftView")
 	if err != nil {
 		return nil, err
@@ -463,7 +463,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, leftSideView, leftSideDiff)
 
-	// Right: B+, A- - B-
+	// Experimental: B+, A- - B-
 	rightSideView, err := d.unionViews(ctx, bPlus, aMinusBMinus, "rightView")
 	if err != nil {
 		return nil, err
@@ -492,7 +492,7 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, middleSideView, middleSideDiff)
 
-	rowDiff := &Diff{Left: leftSideRows, Right: rightSideRows, Middle: middleSideRows, ColNames: colNames}
+	rowDiff := &Diff{Control: leftSideRows, Experimental: rightSideRows, Baseline: middleSideRows, ColNames: colNames}
 
 	// drop all views in reverse order because of dependency
 	for i := len(views) - 1; i >= 0; i-- {

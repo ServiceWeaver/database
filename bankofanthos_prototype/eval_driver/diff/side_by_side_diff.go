@@ -1,7 +1,7 @@
 package diff
 
 import (
-	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbbranch"
 	"fmt"
 	"io"
 	"strings"
@@ -9,7 +9,7 @@ import (
 
 // TODO: boxify side by side diffs
 type sideBySideDiffFormatter struct {
-	tableDiff *dbclone.Diff
+	tableDiff *dbbranch.Diff
 	tableName string
 
 	widths       []int
@@ -19,7 +19,7 @@ type sideBySideDiffFormatter struct {
 	w            io.Writer
 }
 
-func newSideBySideDiffFormatter(w io.Writer, tableDiff *dbclone.Diff, tableName string) *sideBySideDiffFormatter {
+func newSideBySideDiffFormatter(w io.Writer, tableDiff *dbbranch.Diff, tableName string) *sideBySideDiffFormatter {
 	return &sideBySideDiffFormatter{
 		tableDiff: tableDiff,
 		tableName: tableName,
@@ -112,7 +112,7 @@ func (s *sideBySideDiffFormatter) format() error {
 }
 
 func (s *sideBySideDiffFormatter) parseDiff() error {
-	baseline, control, experimental, err := stringifyRows(s.tableDiff.Left, s.tableDiff.Middle, s.tableDiff.Right)
+	control, baseline, experimental, err := stringifyRows(s.tableDiff.Control, s.tableDiff.Baseline, s.tableDiff.Experimental)
 	if err != nil {
 		return err
 	}

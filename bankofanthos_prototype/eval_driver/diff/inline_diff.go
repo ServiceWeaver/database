@@ -1,7 +1,7 @@
 package diff
 
 import (
-	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbbranch"
 	"fmt"
 	"io"
 	"strings"
@@ -14,7 +14,7 @@ const (
 )
 
 type inlineFormatter struct {
-	tableDiff *dbclone.Diff
+	tableDiff *dbbranch.Diff
 	tableName string
 
 	width        int
@@ -25,7 +25,7 @@ type inlineFormatter struct {
 	w            io.Writer
 }
 
-func newInlineFormatter(w io.Writer, tableDiff *dbclone.Diff, tableName string) *inlineFormatter {
+func newInlineFormatter(w io.Writer, tableDiff *dbbranch.Diff, tableName string) *inlineFormatter {
 	return &inlineFormatter{
 		tableDiff: tableDiff,
 		tableName: tableName,
@@ -139,7 +139,7 @@ func (i *inlineFormatter) parseRows(rows [][]string) [][]atom {
 }
 
 func (i *inlineFormatter) parseDiff() error {
-	baseline, control, experimental, err := stringifyRows(i.tableDiff.Left, i.tableDiff.Middle, i.tableDiff.Right)
+	control, baseline, experimental, err := stringifyRows(i.tableDiff.Control, i.tableDiff.Baseline, i.tableDiff.Experimental)
 	if err != nil {
 		return err
 	}

@@ -1,5 +1,5 @@
 // This file creates triggers for a cloned table to redirect queries
-package dbclone
+package dbbranch
 
 import (
 	"context"

@@ -1,7 +1,7 @@
 package diff
 
 import (
-	"bankofanthos_prototype/eval_driver/dbclone"
+	"bankofanthos_prototype/eval_driver/dbbranch"
 	"fmt"
 	"strings"
 )
@@ -56,7 +56,7 @@ func boldUnequalColumns(baseline, control, experimental []atom) {
 	}
 }
 
-func stringifyRow(row *dbclone.Row) ([]string, error) {
+func stringifyRow(row *dbbranch.Row) ([]string, error) {
 	allNil := true
 	for _, val := range *row {
 		if val != nil {
@@ -77,7 +77,7 @@ func stringifyRow(row *dbclone.Row) ([]string, error) {
 	return rowSlice, nil
 }
 
-func stringifyRows(left []*dbclone.Row, middle []*dbclone.Row, right []*dbclone.Row) ([][]string, [][]string, [][]string, error) {
+func stringifyRows(left []*dbbranch.Row, middle []*dbbranch.Row, right []*dbbranch.Row) ([][]string, [][]string, [][]string, error) {
 	if len(left) != len(right) || len(left) != len(middle) {
 		return nil, nil, nil, fmt.Errorf("different length for 3 way diffs, left %d, right: %d, middle: %d", len(left), len(right), len(middle))
 	}
@@ -102,10 +102,10 @@ func stringifyRows(left []*dbclone.Row, middle []*dbclone.Row, right []*dbclone.
 		experimental = append(experimental, rightVal)
 	}
 
-	return baseline, control, experimental, nil
+	return control, baseline, experimental, nil
 }
 
-func DisplayDiff(branchDiffs map[string]*dbclone.Diff, displayInlineDiff bool) (string, error) {
+func DisplayDiff(branchDiffs map[string]*dbbranch.Diff, displayInlineDiff bool) (string, error) {
 	var b strings.Builder
 	for tableName, tableDiff := range branchDiffs {
 		if displayInlineDiff {
