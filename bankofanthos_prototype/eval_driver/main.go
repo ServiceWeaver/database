@@ -42,25 +42,6 @@ func requestsPorts(numOfRuns int, v1Port, v2Port, origListenPort, reqPath string
 		}
 
 		if r == 2 {
-			// for all v2 traffic
-			for i := 0; i < request.Count; i++ {
-				ports = append(ports, v2Port)
-			}
-			allPorts = append(allPorts, ports)
-		}
-
-		if r == 3 {
-			// half to v1, half to v2
-			for i := 0; i < request.Count/2; i++ {
-				ports = append(ports, v1Port)
-			}
-			for i := request.Count / 2; i < request.Count; i++ {
-				ports = append(ports, v2Port)
-			}
-			allPorts = append(allPorts, ports)
-		}
-
-		if r == 4 {
 			// half to v2, half to v1
 			for i := 0; i < request.Count/2; i++ {
 				ports = append(ports, v2Port)
@@ -151,11 +132,11 @@ func main() {
 	flag.StringVar(&origListenPort, "origListenPort", "9000", "Listen port for original service.")
 	flag.StringVar(&v1Port, "v1Port", "9001", "Listen port for stable v1 service.")
 	flag.StringVar(&v2Port, "v2Port", "9002", "Listen port for canary v2 service.")
-	flag.StringVar(&v1Bin, "v1Bin", "./../bankofanthos/bankofanthos", "Stable v1 binary")
-	flag.StringVar(&v2Bin, "v2Bin", "./../bankofanthos/bankofanthos", "Canary v2 binary")
+	flag.StringVar(&v1Bin, "v1Bin", "./../bankofanthos/bankofanthos_demo", "Stable v1 binary")
+	flag.StringVar(&v2Bin, "v2Bin", "./../bankofanthos/bankofanthos_demo", "Canary v2 binary")
 	flag.StringVar(&v1Config, "v1Config", "../bankofanthos/weaver.toml", "Stable v1 config")
 	flag.StringVar(&v2Config, "v2Config", "../bankofanthos/weaver_canary.toml", "Canary v2 config")
-	flag.StringVar(&reqPath, "reqPath", "../tester/reqlog.json", "Requests for eval to run.")
+	flag.StringVar(&reqPath, "reqPath", "../tester/reqlog_demo.json", "Requests for eval to run.")
 	flag.StringVar(&dbUrls, "dbUrls", "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable,postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable", "database urls used for app; split by ,")
 	flag.BoolVar(&deleteBranches, "deleteBranches", true, "Delete branches at the end of eval run, only set false for investigation purpose")
 	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or not")
@@ -199,7 +180,7 @@ func main() {
 
 	ctx := context.Background()
 	runCnt := 0
-	totalRun := 5
+	totalRun := 3
 	// generate traffic patterns for request
 	request, allPorts, err := requestsPorts(totalRun, v1Port, v2Port, origListenPort, reqPath)
 	if err != nil {
@@ -253,55 +234,55 @@ func main() {
 		log.Panicf("Get non deterministic error failed: %v", err)
 	}
 
-	// run experimental service, all traffic send to canary binary
-	runCnt += 1
-	experimentalCanaryNamespace := "E_C"
-	experimentalCanaryService, err := runTrail(ctx, experimentalCanaryNamespace, branchers, runCnt, []string{v2Port}, []service.ProdService{canaryProdService}, allPorts[runCnt], request)
-	if err != nil {
-		log.Panicf("trail run failed: %v", err)
-	}
-	for _, branch := range experimentalCanaryService.Branches {
-		defer func() {
-			if deleteBranches {
-				err = branch.Delete(ctx)
-				if err != nil {
-					log.Panicf("Delete failed: %v", err)
-				}
-			}
-		}()
-	}
+	// // run experimental service, all traffic send to canary binary
+	// runCnt += 1
+	// experimentalCanaryNamespace := "E_C"
+	// experimentalCanaryService, err := runTrail(ctx, experimentalCanaryNamespace, branchers, runCnt, []string{v2Port}, []service.ProdService{canaryProdService}, allPorts[runCnt], request)
+	// if err != nil {
+	// 	log.Panicf("trail run failed: %v", err)
+	// }
+	// for _, branch := range experimentalCanaryService.Branches {
+	// 	defer func() {
+	// 		if deleteBranches {
+	// 			err = branch.Delete(ctx)
+	// 			if err != nil {
+	// 				log.Panicf("Delete failed: %v", err)
+	// 			}
+	// 		}
+	// 	}()
+	// }
 
-	_, err = diff.OutputEq(controlService.OutputPath, experimentalCanaryService.OutputPath, responseType)
-	if err != nil {
-		log.Panicf("Failed to compare two outputs: %v", err)
-	}
+	// _, err = diff.OutputEq(controlService.OutputPath, experimentalCanaryService.OutputPath, responseType)
+	// if err != nil {
+	// 	log.Panicf("Failed to compare two outputs: %v", err)
+	// }
 
-	printDbDiffs(ctx, branchers, experimentalCanaryNamespace, controlService.Branches, experimentalCanaryService.Branches, inlineDiff, request.Count)
+	// printDbDiffs(ctx, branchers, experimentalCanaryNamespace, controlService.Branches, experimentalCanaryService.Branches, inlineDiff, request.Count)
 
-	// run requests half on stable (v1) half on canary (v2)
-	runCnt += 1
-	experimentalSCNamespace := "E_SC"
-	experimentalSCService, err := runTrail(ctx, experimentalSCNamespace, branchers, runCnt, []string{v1Port, v2Port}, []service.ProdService{stableProdService, canaryProdService}, allPorts[runCnt], request)
-	if err != nil {
-		log.Panicf("trail run failed: %v", err)
-	}
-	for _, branch := range experimentalSCService.Branches {
-		defer func() {
-			if deleteBranches {
-				err = branch.Delete(ctx)
-				if err != nil {
-					log.Panicf("Delete failed: %v", err)
-				}
-			}
-		}()
-	}
+	// // run requests half on stable (v1) half on canary (v2)
+	// runCnt += 1
+	// experimentalSCNamespace := "E_SC"
+	// experimentalSCService, err := runTrail(ctx, experimentalSCNamespace, branchers, runCnt, []string{v1Port, v2Port}, []service.ProdService{stableProdService, canaryProdService}, allPorts[runCnt], request)
+	// if err != nil {
+	// 	log.Panicf("trail run failed: %v", err)
+	// }
+	// for _, branch := range experimentalSCService.Branches {
+	// 	defer func() {
+	// 		if deleteBranches {
+	// 			err = branch.Delete(ctx)
+	// 			if err != nil {
+	// 				log.Panicf("Delete failed: %v", err)
+	// 			}
+	// 		}
+	// 	}()
+	// }
 
-	_, err = diff.OutputEq(controlService.OutputPath, experimentalSCService.OutputPath, responseType)
-	if err != nil {
-		log.Panicf("Failed to compare two outputs: %v", err)
-	}
+	// _, err = diff.OutputEq(controlService.OutputPath, experimentalSCService.OutputPath, responseType)
+	// if err != nil {
+	// 	log.Panicf("Failed to compare two outputs: %v", err)
+	// }
 
-	printDbDiffs(ctx, branchers, experimentalSCNamespace, controlService.Branches, experimentalSCService.Branches, inlineDiff, request.Count)
+	// printDbDiffs(ctx, branchers, experimentalSCNamespace, controlService.Branches, experimentalSCService.Branches, inlineDiff, request.Count)
 
 	// run requests half on canary (v2) half on stable (v1)
 	runCnt += 1

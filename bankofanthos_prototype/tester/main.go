@@ -13,7 +13,7 @@ const reqLog = "reqlog.json" //req log file
 func main() {
 	var countsList string
 
-	flag.StringVar(&countsList, "counts", "6, 9", "Req count per user, must be >= 3, split by,")
+	flag.StringVar(&countsList, "counts", "5", "Req count per user, must be >= 3, split by,")
 	flag.Parse()
 
 	var counts []int

@@ -107,13 +107,10 @@ func (s *Service) generateConfig(configPath, listenPort string, prodService Prod
 		return err
 	}
 
-	fmt.Printf("Successfully generate config file %s\n", configPath)
 	return nil
 }
 
 func (s *Service) start(cmdCh chan *exec.Cmd, upCh chan bool, binPath, configPath, logPath string) {
-	fmt.Printf("Start running service %s, config file %s\n", s.Runs, configPath)
-
 	cmd := exec.Command(binPath)
 	cmd.Env = append(os.Environ(), "SERVICEWEAVER_CONFIG="+configPath)
 
@@ -152,12 +149,10 @@ func (s *Service) stop(cmdCh chan *exec.Cmd, runs int) {
 			}
 			i++
 			if i >= runs {
-				fmt.Printf("Stopped service %s\n", s.Runs)
 				return
 			}
 		default:
 			time.Sleep(1 * time.Second)
-			fmt.Println("Waiting for command")
 		}
 	}
 }
@@ -180,8 +175,6 @@ func (s *Service) Run(ctx context.Context) {
 	}
 	go s.stop(cmdCh, len(s.ProdServices))
 	wg.Wait()
-
-	fmt.Println("Finished running service")
 }
 
 func (s *Service) sendHttpReqs(ctx context.Context, client *http.Client, ports []string) error {
@@ -220,7 +213,6 @@ func (s *Service) sendRequests(ctx context.Context, upCh chan bool) error {
 		case <-upCh:
 			i++
 			if i == len(s.ConfigPaths) {
-				fmt.Println("Start sending requests")
 				err := s.sendHttpReqs(ctx, &client, s.ReqPorts)
 				if err != nil {
 					return err
@@ -228,7 +220,6 @@ func (s *Service) sendRequests(ctx context.Context, upCh chan bool) error {
 				return nil
 			}
 		default:
-			println("Waiting for service up")
 			time.Sleep(1 * time.Second)
 		}
 	}

@@ -26,7 +26,6 @@ import (
 
 	"github.com/ServiceWeaver/weaver"
 	"github.com/golang-jwt/jwt"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // CreateUserRequest contains data used for creating a new user.
@@ -118,16 +117,16 @@ func (i *impl) CreateUser(ctx context.Context, r CreateUserRequest) error {
 		return err
 	}
 	i.Logger(ctx).Info("Creating password hash.")
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.MinCost)
-	if err != nil {
-		return err
-	}
+	// passwordHash, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.MinCost)
+	// if err != nil {
+	// 	return err
+	// }
 	accountID := i.db.generateAccountID(i.Config().AccountIdLength)
 
 	userData := User{
 		AccountID: accountID,
 		Username:  r.Username,
-		Passhash:  passwordHash,
+		Passhash:  []byte(r.Password),
 		Firstname: r.FirstName,
 		Lastname:  r.LastName,
 		Birthday:  r.Birthday,
@@ -152,7 +151,10 @@ func (i *impl) Login(ctx context.Context, r LoginRequest) (string, error) {
 		return "", err
 	}
 	i.Logger(ctx).Debug("Validating the password.")
-	if err := bcrypt.CompareHashAndPassword(user.Passhash, []byte(r.Password)); err != nil {
+	// if err := bcrypt.CompareHashAndPassword(user.Passhash, []byte(r.Password)); err != nil {
+	// 	return "", err
+	// }
+	if string(user.Passhash) != r.Password {
 		return "", err
 	}
 
