@@ -33,7 +33,7 @@ func requestsPorts(numOfRuns int, v1Port, v2Port, origListenPort, reqPath string
 	}
 	for r := 0; r < numOfRuns; r++ {
 		ports := []string{}
-		if r <= 1 {
+		if r == 0 {
 			// for all v1 traffic
 			for i := 0; i < request.Count; i++ {
 				ports = append(ports, v1Port)
@@ -41,7 +41,7 @@ func requestsPorts(numOfRuns int, v1Port, v2Port, origListenPort, reqPath string
 			allPorts = append(allPorts, ports)
 		}
 
-		if r == 2 {
+		if r == 1 {
 			// half to v2, half to v1
 			for i := 0; i < request.Count/2; i++ {
 				ports = append(ports, v2Port)
@@ -180,7 +180,7 @@ func main() {
 
 	ctx := context.Background()
 	runCnt := 0
-	totalRun := 3
+	totalRun := 2
 	// generate traffic patterns for request
 	request, allPorts, err := requestsPorts(totalRun, v1Port, v2Port, origListenPort, reqPath)
 	if err != nil {
@@ -213,26 +213,26 @@ func main() {
 		}()
 	}
 
-	runCnt += 1
+	// runCnt += 1
 
-	controlService2, err := runTrail(ctx, "ControlTwo", branchers, runCnt, []string{v1Port}, []service.ProdService{stableProdService}, allPorts[runCnt], request)
-	if err != nil {
-		log.Panicf("trail run failed: %v", err)
-	}
-	for _, branch := range controlService2.Branches {
-		defer func() {
-			if deleteBranches {
-				err = branch.Delete(ctx)
-				if err != nil {
-					log.Panicf("Delete failed: %v", err)
-				}
-			}
-		}()
-	}
+	// controlService2, err := runTrail(ctx, "ControlTwo", branchers, runCnt, []string{v1Port}, []service.ProdService{stableProdService}, allPorts[runCnt], request)
+	// if err != nil {
+	// 	log.Panicf("trail run failed: %v", err)
+	// }
+	// for _, branch := range controlService2.Branches {
+	// 	defer func() {
+	// 		if deleteBranches {
+	// 			err = branch.Delete(ctx)
+	// 			if err != nil {
+	// 				log.Panicf("Delete failed: %v", err)
+	// 			}
+	// 		}
+	// 	}()
+	// }
 
-	if err := diff.GetNonDeterministic(controlService, controlService2); err != nil {
-		log.Panicf("Get non deterministic error failed: %v", err)
-	}
+	// if err := diff.GetNonDeterministic(controlService, controlService2); err != nil {
+	// 	log.Panicf("Get non deterministic error failed: %v", err)
+	// }
 
 	// // run experimental service, all traffic send to canary binary
 	// runCnt += 1
