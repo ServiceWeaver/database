@@ -49,7 +49,7 @@ docker run \
     --volume="/usr/local/google/home/zhukexin/database/bankofanthos_prototype/eval_driver/postgresql.conf:/etc/postgres/postgresql.conf" \
     --publish 127.0.0.1:5432:5432 \
     postgres:15 \
-    -c log_statement=all -c config_file=/etc/postgres/postgresql.conf
+    -c config_file=/etc/postgres/postgresql.conf
 sleep 5
 
 # establish database
