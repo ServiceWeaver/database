@@ -60,3 +60,4 @@ openssl rsa -in jwtRS256.key -outform PEM -pubout -out jwtRS256.key.pub
 mkdir -p /tmp/.ssh
 mv jwtRS256.key jwtRS256.key.pub /tmp/.ssh
 }
+ main "$@"
