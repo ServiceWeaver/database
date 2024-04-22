@@ -48,7 +48,9 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	AS $$
 	DECLARE %s BIGINT;
 	BEGIN
-	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+	LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE;
+	LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE;
+	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Plus.Name, clonedTable.Minus.Name, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	// TODO: make it more generic way for auto-generate id
 	if idGeneratorQuery != "" {
@@ -137,7 +139,9 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	AS $$
 	DECLARE %s BIGINT;
 	BEGIN
-	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+	LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE;
+	LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE;
+	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Plus.Name, clonedTable.Minus.Name, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	for _, index := range clonedTable.Snapshot.Indexes {
 		if index.IsUnique {
@@ -238,7 +242,14 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	AS $$
 	DECLARE %s BIGINT;
 	BEGIN
-	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+	LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE;
+	LOCK TABLE %s IN SHARE ROW EXCLUSIVE MODE;
+	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Plus.Name, clonedTable.Minus.Name, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+
+	storedProcedureQuery += fmt.Sprintf(`
+	IF NOT EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) THEN
+	RAISE EXCEPTION 'delete non-exist row';
+	END IF;`, clonedTable.View.Name, strings.Join(cols, ", "), strings.Join(oldCols, ", "))
 
 	// TODO: Add other foreign key actions
 	// check if the key is referenced by other table

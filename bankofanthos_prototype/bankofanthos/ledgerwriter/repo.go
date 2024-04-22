@@ -16,6 +16,7 @@ package ledgerwriter
 
 import (
 	"bankofanthos_prototype/bankofanthos/model"
+	"strings"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -35,4 +36,26 @@ func newTransactionRepository(databaseURI string) (*transactionRepository, error
 
 func (r *transactionRepository) save(transaction *model.Transaction) error {
 	return r.db.Create(transaction).Error
+}
+
+// update Balance updates acctId to amount.
+// Delete existing record if there is any, then insert the updated amount.
+func (r *transactionRepository) updateBalance(acctId string, amount int64) error {
+	updatedAcctId := strings.TrimPrefix(acctId, "00")
+	if len(updatedAcctId) == 10 {
+		updatedAcctId = updatedAcctId + "  "
+	}
+	deleteSql := `
+	DELETE FROM balances Where acctid = ?;
+	`
+	delete := r.db.Exec(deleteSql, updatedAcctId)
+	if delete.Error != nil {
+		return delete.Error
+	}
+
+	insertSql := `
+	INSERT INTO balances(acctid, amount) VALUES(?, ?);
+	`
+	insert := r.db.Exec(insertSql, updatedAcctId, amount)
+	return insert.Error
 }

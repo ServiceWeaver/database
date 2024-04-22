@@ -48,6 +48,21 @@ add_transaction() {
 EOSQL
 }
 
+increase_balances() {
+  echo "deposit $2 to account $1"
+  PGPASSWORD="$POSTGRES_PASSWORD" psql -p5432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -v acctid="$1" -v amount="$2" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+  INSERT INTO BALANCES(acctid, amount) VALUES(:'acctid', :amount)
+  ON CONFLICT(acctid) DO UPDATE SET amount = BALANCES.amount + :amount;
+EOSQL
+}
+
+decrease_balances() {
+  echo "send $2 to account $1"
+  PGPASSWORD="$POSTGRES_PASSWORD" psql -p5432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -v acctid="$1" -v amount="$2" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+  UPDATE BALANCES set amount = BALANCES.amount - :amount WHERE acctid = :'acctid';
+EOSQL
+}
+
 
 create_transactions() {
     PAY_PERIODS=3
@@ -62,6 +77,7 @@ create_transactions() {
         # create deposit transaction for each user
         for account in ${USER_ACCOUNTS[@]}; do
             add_transaction "$EXTERNAL_ACCOUNT" "$account" "$EXTERNAL_ROUTING" "$LOCAL_ROUTING_NUM" $DEPOSIT_AMOUNT $START_TIMESTAMP
+            increase_balances "$account" $DEPOSIT_AMOUNT
         done
 
         # create 15-20 payments between users
@@ -81,6 +97,8 @@ create_transactions() {
             TIMESTAMP=$(( $START_TIMESTAMP + $(( $SECONDS_IN_PAY_PERIOD * $p / $(($TRANSACTIONS_PER_PERIOD + 1 )) )) ))
 
             add_transaction "$SENDER_ACCOUNT" "$RECIPIENT_ACCOUNT" "$LOCAL_ROUTING_NUM" "$LOCAL_ROUTING_NUM" $AMOUNT $TIMESTAMP
+            decrease_balances "$SENDER_ACCOUNT" $AMOUNT 
+            increase_balances "$RECIPIENT_ACCOUNT" $AMOUNT
         done
 
         START_TIMESTAMP=$(( $START_TIMESTAMP + $(( $i * $SECONDS_IN_PAY_PERIOD  )) ))

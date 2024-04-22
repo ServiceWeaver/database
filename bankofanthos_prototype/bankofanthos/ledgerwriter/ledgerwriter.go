@@ -84,7 +84,26 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 			return err
 		}
 		if balance < transaction.Amount {
-			return errors.New("transaction submission failed: Insufficient balance")
+			return fmt.Errorf("transaction submission failed: Insufficient balance %d", balance)
+		}
+
+		updatedAmount := balance - int64(transaction.Amount)
+		err = i.txnRepo.updateBalance(transaction.FromAccountNum, updatedAmount)
+		if err != nil {
+			return err
+		}
+	}
+
+	if transaction.ToRoutingNum == i.Config().LocalRoutingNum {
+		balance, err := i.getAvailableBalance(ctx, transaction.ToAccountNum)
+		if err != nil {
+			return err
+		}
+
+		updatedAmount := balance + int64(transaction.Amount)
+		err = i.txnRepo.updateBalance(transaction.ToAccountNum, updatedAmount)
+		if err != nil {
+			return err
 		}
 	}
 
