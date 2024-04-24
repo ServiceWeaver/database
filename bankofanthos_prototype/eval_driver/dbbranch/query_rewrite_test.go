@@ -56,8 +56,6 @@ func TestQueryRewrite(t *testing.T) {
 				ProSrc: `
 				DECLARE rid BIGINT;
 				BEGIN
-				LOCK TABLE test.usersplus IN SHARE ROW EXCLUSIVE MODE;
-				LOCK TABLE test.usersminus IN SHARE ROW EXCLUSIVE MODE;
 				rid := (SELECT id FROM test.rid);
 				IF EXISTS (SELECT * FROM users WHERE (accountid) = (NEW.accountid)) THEN
 					RAISE EXCEPTION 'column % already exists', NEW.accountid;
@@ -99,8 +97,6 @@ func TestQueryRewrite(t *testing.T) {
 				ProSrc: `
 				DECLARE rid BIGINT;
 				BEGIN
-				LOCK TABLE test.contactsplus IN SHARE ROW EXCLUSIVE MODE;
-				LOCK TABLE test.contactsminus IN SHARE ROW EXCLUSIVE MODE;
 				rid := (SELECT id FROM test.rid);
 				IF NOT EXISTS (SELECT * FROM users WHERE (username) = (NEW.username)) THEN
 				RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in  users table';
@@ -139,8 +135,6 @@ func TestQueryRewrite(t *testing.T) {
 				ProSrc: `
 				DECLARE rid BIGINT;
 				BEGIN
-				LOCK TABLE test.usersplus IN SHARE ROW EXCLUSIVE MODE;
-				LOCK TABLE test.usersminus IN SHARE ROW EXCLUSIVE MODE;
 				rid := (SELECT id FROM test.rid);
 				IF EXISTS (SELECT * FROM users WHERE (accountid) = (NEW.accountid)) AND (NEW.accountid) != (OLD.accountid) THEN
 					RAISE EXCEPTION 'column % already exists', NEW.accountid;
@@ -185,8 +179,6 @@ func TestQueryRewrite(t *testing.T) {
 				ProSrc: `
 				DECLARE rid BIGINT;
 				BEGIN
-				LOCK TABLE test.contactsplus IN SHARE ROW EXCLUSIVE MODE;
-				LOCK TABLE test.contactsminus IN SHARE ROW EXCLUSIVE MODE;
 				rid := (SELECT id FROM test.rid);
 				IF NOT EXISTS (SELECT * FROM users WHERE (username) = (NEW.username)) THEN
 				RAISE EXCEPTION 'violates foreign key constraint, forigen key does not exist in users table';
@@ -225,8 +217,6 @@ func TestQueryRewrite(t *testing.T) {
 				ProSrc: `
 				DECLARE rid BIGINT;
 				BEGIN
-				LOCK TABLE test.usersplus IN SHARE ROW EXCLUSIVE MODE;
-				LOCK TABLE test.usersminus IN SHARE ROW EXCLUSIVE MODE;
 				rid := (SELECT id FROM test.rid);
 				IF NOT EXISTS (SELECT * FROM users WHERE (accountid, birthday, passhash, username) = (OLD.accountid, OLD.birthday, OLD.passhash, OLD.username)) THEN
 				RAISE EXCEPTION 'delete non-exist row';
@@ -267,8 +257,6 @@ func TestQueryRewrite(t *testing.T) {
 				ProSrc: `
 				DECLARE rid BIGINT;
 				BEGIN
-				LOCK TABLE test.contactsplus IN SHARE ROW EXCLUSIVE MODE;
-				LOCK TABLE test.contactsminus IN SHARE ROW EXCLUSIVE MODE;
 				rid := (SELECT id FROM test.rid);
 				IF NOT EXISTS (SELECT * FROM contacts WHERE (account_num, is_external, username) = (OLD.account_num, OLD.is_external, OLD.username)) THEN
 				RAISE EXCEPTION 'delete non-exist row';
