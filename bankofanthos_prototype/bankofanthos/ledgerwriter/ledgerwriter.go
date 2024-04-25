@@ -64,6 +64,7 @@ func (i *impl) getAvailableBalance(ctx context.Context, accountNum string) (int6
 }
 
 // AddTransaction implements the T interface.
+// Note: there may be some bugs while adding transactions because original bank of anthos has bugs for handling it.
 func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAccount string, transaction model.Transaction) error {
 	// Check for duplicate transactions.
 	if _, ok := i.cache.Get(requestUuid); ok {
