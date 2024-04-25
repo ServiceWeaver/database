@@ -218,9 +218,6 @@ func TestQueryRewrite(t *testing.T) {
 				DECLARE rid BIGINT;
 				BEGIN
 				rid := (SELECT id FROM test.rid);
-				IF NOT EXISTS (SELECT * FROM users WHERE (accountid, birthday, passhash, username) = (OLD.accountid, OLD.birthday, OLD.passhash, OLD.username)) THEN
-				RAISE EXCEPTION 'delete non-exist row';
-				END IF;
 				IF EXISTS (SELECT * FROM contacts WHERE (username) = (OLD.username)) THEN
 				RAISE EXCEPTION 'violates foreign key constraint';
 				END IF;
@@ -258,9 +255,6 @@ func TestQueryRewrite(t *testing.T) {
 				DECLARE rid BIGINT;
 				BEGIN
 				rid := (SELECT id FROM test.rid);
-				IF NOT EXISTS (SELECT * FROM contacts WHERE (account_num, is_external, username) = (OLD.account_num, OLD.is_external, OLD.username)) THEN
-				RAISE EXCEPTION 'delete non-exist row';
-				END IF;
 				INSERT INTO test.contactsminus (account_num, is_external, username, rid) VALUES (OLD.account_num, OLD.is_external, OLD.username, rid);
 				RETURN OLD;
 				END;

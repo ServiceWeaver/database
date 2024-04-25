@@ -88,7 +88,11 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 		}
 
 		updatedAmount := balance - int64(transaction.Amount)
-		err = i.txnRepo.updateBalance(transaction.FromAccountNum, updatedAmount)
+		acctId := strings.TrimPrefix(transaction.FromAccountNum, "00")
+		if len(acctId) == 10 {
+			acctId = acctId + "  "
+		}
+		err = i.txnRepo.updateBalance(acctId, updatedAmount)
 		if err != nil {
 			return err
 		}
@@ -101,7 +105,11 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 		}
 
 		updatedAmount := balance + int64(transaction.Amount)
-		err = i.txnRepo.updateBalance(transaction.ToAccountNum, updatedAmount)
+		acctId := strings.TrimPrefix(transaction.ToAccountNum, "00")
+		if len(acctId) == 10 {
+			acctId = acctId + "  "
+		}
+		err = i.txnRepo.updateBalance(acctId, updatedAmount)
 		if err != nil {
 			return err
 		}

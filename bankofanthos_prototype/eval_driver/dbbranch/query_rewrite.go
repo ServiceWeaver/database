@@ -240,11 +240,6 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	BEGIN
 	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
-	storedProcedureQuery += fmt.Sprintf(`
-	IF NOT EXISTS (SELECT * FROM %s WHERE (%s) = (%s)) THEN
-	RAISE EXCEPTION 'delete non-exist row';
-	END IF;`, clonedTable.View.Name, strings.Join(cols, ", "), strings.Join(oldCols, ", "))
-
 	// TODO: Add other foreign key actions
 	// check if the key is referenced by other table
 	for _, ref := range clonedTable.Snapshot.References {

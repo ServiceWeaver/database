@@ -51,13 +51,13 @@ EOSQL
 increase_balances() {
   echo "deposit $2 to account $1"
   PGPASSWORD="$POSTGRES_PASSWORD" psql -p5432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -v acctid="$1" -v amount="$2" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-  INSERT INTO BALANCES(acctid, amount) VALUES(:'acctid', :amount)
+  INSERT INTO BALANCES(acctid, amount) VALUES(:'acctid', :'amount')
   ON CONFLICT(acctid) DO UPDATE SET amount = BALANCES.amount + :amount;
 EOSQL
 }
 
 decrease_balances() {
-  echo "send $2 to account $1"
+  echo "withdraw $2 from account $1"
   PGPASSWORD="$POSTGRES_PASSWORD" psql -p5432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -v acctid="$1" -v amount="$2" --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
   UPDATE BALANCES set amount = BALANCES.amount - :amount WHERE acctid = :'acctid';
 EOSQL
