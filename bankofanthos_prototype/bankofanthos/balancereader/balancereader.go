@@ -37,6 +37,7 @@ type impl struct {
 	weaver.Implements[T]
 	weaver.WithConfig[config]
 	txnRepo      *transactionRepository
+	balanceDb    *balanceDB
 	balanceCache *balanceCache
 	ledgerReader *common.LedgerReader
 }
@@ -70,18 +71,23 @@ func (i *impl) Init(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	const cacheSize = 1000000
-	i.balanceCache = newBalanceCache(i.txnRepo, cacheSize, i.Config().LocalRoutingNum)
+
 	i.ledgerReader = common.NewLedgerReader(i.txnRepo, i.Logger(ctx))
 	i.ledgerReader.StartWithCallback(i)
+	i.balanceDb, err = newBalanceDB(i.Config().DataSourceURL)
+	if err != nil {
+		return err
+	}
+	const cacheSize = 1000000
+	i.balanceCache = newBalanceCache(i.balanceDb, cacheSize)
 	return nil
 }
 
 func (i *impl) GetBalance(ctx context.Context, accountID string) (int64, error) {
-	// Load from cache.
-	got, err := i.balanceCache.c.Get(accountID)
+	balance, err := i.balanceDb.getBalance(accountID)
 	if err != nil {
 		return 0, err
 	}
-	return got.(int64), nil
+	return balance.Amount, nil
+
 }
