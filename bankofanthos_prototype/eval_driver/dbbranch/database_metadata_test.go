@@ -22,6 +22,7 @@ func SetupTestDatabase(ctx context.Context) (testcontainers.Container, *pgxpool.
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("postgres"),
 		postgres.WithPassword("postgres"),
+		postgres.WithConfigFile("../postgresql.conf"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).

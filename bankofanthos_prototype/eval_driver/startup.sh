@@ -13,8 +13,10 @@ docker run \
     --volume="$(realpath postgresdb.sql):/app/postgresdb.sql" \
     --volume="$(realpath accountsdb.sql):/app/accountsdb.sql" \
     --volume="$(realpath 1_create_transactions.sh):/app/1_create_transactions.sh" \
+    --volume="$(realpath postgresql.conf):/etc/postgres/postgresql.conf" \
     --publish 127.0.0.1:5432:5432 \
-    postgres:15
+    postgres:15 \
+    -c config_file=/etc/postgres/postgresql.conf
 
 sleep 2
 
