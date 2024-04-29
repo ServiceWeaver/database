@@ -1,15 +1,13 @@
-package service
+package utility
 
 import (
-	"bankofanthos_prototype/eval_driver/utility"
 	"fmt"
 	"os/exec"
 	"strings"
 )
 
-type Database struct {
-	Name string
-	Url  string
+func GetSnapshotDbNameByProd(name string) string {
+	return name + "snapshot"
 }
 
 func TakeSnapshot(db *Database, snapshotPath string) error {
@@ -34,7 +32,7 @@ func dbExists(name string, prodDb *Database) (bool, error) {
 
 // RestoreSnapshot creates a separate snapshot db if not exist, and restore prod db to snapshot db
 func RestoreSnapshot(snapshotPath string, prodDb *Database) (*Database, error) {
-	dbName := utility.GetSnapshotDbNameByProd(prodDb.Name)
+	dbName := GetSnapshotDbNameByProd(prodDb.Name)
 	exists, err := dbExists(dbName, prodDb)
 	if err != nil {
 		return nil, err
