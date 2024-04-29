@@ -1,9 +1,14 @@
 package utility
 
-func GetProdDbNameBySnapshot(name string) string {
-	return name[:len(name)-len("snapshot")]
+type Database struct {
+	Name string
+	Url  string
 }
 
-func GetSnapshotDbNameByProd(name string) string {
-	return name + "snapshot"
+// ProdService defines binary will be running in prod
+type ProdService struct {
+	ConfigPath     string
+	Bin            string
+	ListenPort     string // prod listen port
+	TestListenPort string // listen port used for eval test
 }
