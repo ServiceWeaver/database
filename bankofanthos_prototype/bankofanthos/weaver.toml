@@ -1,5 +1,5 @@
 [serviceweaver]
-binary = "./bankofanthos"
+binary = "./bankofanthos_demo"
 
 [single]
 listeners.bank = {address = "localhost:9000"}

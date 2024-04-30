@@ -239,7 +239,11 @@ func (s *server) paymentHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid amount", http.StatusBadRequest)
 		return
 	}
+
+	// [BUG0]
+	// paymentAmount *= 10000
 	paymentAmount *= 100
+
 	logger.Debug("Debug: starting transactions")
 	txn := model.Transaction{
 		FromAccountNum: authenticatedAccountID,
@@ -331,6 +335,9 @@ func (s *server) depositHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid amount", http.StatusBadRequest)
 		return
 	}
+
+	// [BUG0]
+	// paymentAmount *= 10000
 	paymentAmount *= 100
 
 	txn := model.Transaction{
