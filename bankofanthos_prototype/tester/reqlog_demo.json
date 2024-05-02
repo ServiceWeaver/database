@@ -89,11 +89,6 @@
       },
       "Method": "POST",
       "Url": "http://localhost:9000/payment"
-    },
-    {
-      "Body": {},
-      "Method": "POST",
-      "Url": "http://localhost:9000/logout"
     }
   ]
 }

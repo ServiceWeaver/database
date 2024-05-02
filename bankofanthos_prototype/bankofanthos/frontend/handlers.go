@@ -241,15 +241,15 @@ func (s *server) paymentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// [BUG0]
-	paymentAmount *= 10000
-	// paymentAmount *= 100
+	// paymentAmount *= 10000
+	paymentAmount *= 100
 
 	logger.Debug("Debug: starting transactions")
 	txn := model.Transaction{
 		FromAccountNum: authenticatedAccountID,
 		FromRoutingNum: s.config.localRoutingNum,
 		ToAccountNum:   recipient,
-		ToRoutingNum:   s.config.localRoutingNum,
+		ToRoutingNum:   "000000000",
 		Amount:         int64(paymentAmount),
 		Timestamp:      time.Now(),
 	}
@@ -337,8 +337,8 @@ func (s *server) depositHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// [BUG0]
-	paymentAmount *= 10000
-	// paymentAmount *= 100
+	// paymentAmount *= 10000
+	paymentAmount *= 100
 
 	txn := model.Transaction{
 		FromAccountNum: externalAccountNum,

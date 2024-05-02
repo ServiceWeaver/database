@@ -11,11 +11,11 @@ databases = {"accountsdb"="postgresql://admin:admin@localhost:5432/accountsdb?ss
 requestPath = "../tester/reqlog_demo.json"
 
 [stable]
-port = "9001"
+port = "9003"
 bin = "./../bankofanthos/bankofanthos_demo"
 config = "../bankofanthos/weaver.toml"
 
 [canary]
-port = "9002"
-bin = "./../bankofanthos/bankofanthos_demo_1"
+port = "9004"
+bin = "./../bankofanthos/bankofanthos_demo_bug1"
 config = "../bankofanthos/weaver.toml"

@@ -121,7 +121,7 @@ func (i *impl) CreateUser(ctx context.Context, r CreateUserRequest) error {
 	// if err != nil {
 	// 	return err
 	// }
-	accountID := i.db.generateAccountID(i.Config().AccountIdLength)
+	accountID := i.db.generateAccountID(i.Config().AccountIdLength, r.Username)
 
 	userData := User{
 		AccountID: accountID,

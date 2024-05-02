@@ -15,8 +15,11 @@
 package userservice
 
 import (
+	"crypto/md5"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 
 	"github.com/ServiceWeaver/weaver"
@@ -57,15 +60,19 @@ func (udb *userDB) addUser(user User) error {
 }
 
 // Generates a globally unique alphanumerical accountid.
-func (udb *userDB) generateAccountID(accountIdLength int) string {
+func (udb *userDB) generateAccountID(accountIdLength int, username string) string {
 	var accountID string
 	for {
 		// [BUG]
 		// baseline code
+		h := md5.New()
+		io.WriteString(h, username)
+		seed := int64(binary.BigEndian.Uint64(h.Sum(nil)))
+		rand := rand.New(rand.NewSource(seed))
 		if accountIdLength == 10 {
 			accountID = fmt.Sprint(rand.Int63n(1e10-1e9) + 1e9)
 		} else {
-			accountID = fmt.Sprint(rand.Int63n(1e12-1e11) + 1e11)
+			accountID = fmt.Sprintf("00%d", rand.Int63n(1e10-1e9)+1e9)
 		}
 		// end of [BUG]
 		var user User
