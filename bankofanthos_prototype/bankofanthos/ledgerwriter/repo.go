@@ -36,3 +36,21 @@ func newTransactionRepository(databaseURI string) (*transactionRepository, error
 func (r *transactionRepository) save(transaction *model.Transaction) error {
 	return r.db.Create(transaction).Error
 }
+
+// update Balance updates acctId to amount.
+// Delete existing record if there is any, then insert the updated amount.
+func (r *transactionRepository) updateBalance(acctId string, amount int64) error {
+	deleteSql := `
+	DELETE FROM balances Where acctid = ?;
+	`
+	delete := r.db.Exec(deleteSql, acctId)
+	if delete.Error != nil {
+		return delete.Error
+	}
+
+	insertSql := `
+	INSERT INTO balances(acctid, amount) VALUES(?, ?);
+	`
+	insert := r.db.Exec(insertSql, acctId, amount)
+	return insert.Error
+}

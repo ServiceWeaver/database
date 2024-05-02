@@ -35,3 +35,9 @@ CREATE RULE PREVENT_UPDATE AS
 CREATE RULE PREVENT_DELETE AS
   ON DELETE TO transactions
   DO INSTEAD NOTHING;
+
+
+CREATE TABLE balances (
+  acctid        CHAR(12)  PRIMARY KEY,
+  amount        INT       NOT NULL
+);

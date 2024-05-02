@@ -28,27 +28,3 @@ func newTransactionRepository(databaseURI string) (*transactionRepository, error
 	}
 	return &transactionRepository{LedgerReaderTransactionRepository: *repo}, nil
 }
-
-// findBalance returns the current balance of the given account.
-func (r *transactionRepository) findBalance(accountNum, routingNum string) (int64, error) {
-	sql := `
-SELECT
-  (
-    SELECT SUM(AMOUNT) FROM TRANSACTIONS t
-    WHERE (TO_ACCT = ? AND TO_ROUTE = ?)
-  )
-  -
-  (
-    SELECT COALESCE((SELECT SUM(AMOUNT) FROM TRANSACTIONS t
-    WHERE (FROM_ACCT = ? AND FROM_ROUTE = ?)),0)
-  )
-  as balance
-`
-	var balance int64
-	row := r.DB.Raw(sql, accountNum, routingNum, accountNum, routingNum).Row()
-	err := row.Scan(&balance)
-	if err != nil {
-		return 0, err
-	}
-	return balance, nil
-}

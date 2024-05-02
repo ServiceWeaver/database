@@ -64,6 +64,7 @@ func (i *impl) getAvailableBalance(ctx context.Context, accountNum string) (int6
 }
 
 // AddTransaction implements the T interface.
+// Note: there may be some bugs while adding transactions because original bank of anthos has bugs for handling it.
 func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAccount string, transaction model.Transaction) error {
 	// Check for duplicate transactions.
 	if _, ok := i.cache.Get(requestUuid); ok {
@@ -84,7 +85,34 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 			return err
 		}
 		if balance < transaction.Amount {
-			return errors.New("transaction submission failed: Insufficient balance")
+			return fmt.Errorf("transaction submission failed: Insufficient balance %d", balance)
+		}
+
+		updatedAmount := balance - int64(transaction.Amount)
+		acctId := strings.TrimPrefix(transaction.FromAccountNum, "00")
+		if len(acctId) == 10 {
+			acctId = acctId + "  "
+		}
+		err = i.txnRepo.updateBalance(acctId, updatedAmount)
+		if err != nil {
+			return err
+		}
+	}
+
+	if transaction.ToRoutingNum == i.Config().LocalRoutingNum {
+		balance, err := i.getAvailableBalance(ctx, transaction.ToAccountNum)
+		if err != nil {
+			return err
+		}
+
+		updatedAmount := balance + int64(transaction.Amount)
+		acctId := strings.TrimPrefix(transaction.ToAccountNum, "00")
+		if len(acctId) == 10 {
+			acctId = acctId + "  "
+		}
+		err = i.txnRepo.updateBalance(acctId, updatedAmount)
+		if err != nil {
+			return err
 		}
 	}
 

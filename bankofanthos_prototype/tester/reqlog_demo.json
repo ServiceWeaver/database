@@ -44,18 +44,6 @@
     },
     {
       "Body": {
-        "password": [
-          "1234"
-        ],
-        "username": [
-          "demo"
-        ]
-      },
-      "Method": "POST",
-      "Url": "http://localhost:9000/login"
-    },
-    {
-      "Body": {
         "account": [
           "add"
         ],
@@ -73,30 +61,6 @@
         ],
         "uuid": [
           "8387987a-9785-45bd-ada5-89f2a91a9135"
-        ]
-      },
-      "Method": "POST",
-      "Url": "http://localhost:9000/deposit"
-    },
-    {
-      "Body": {
-        "account": [
-          "add"
-        ],
-        "amount": [
-          "100"
-        ],
-        "external_account_num": [
-          "9876543210"
-        ],
-        "external_label": [
-          ""
-        ],
-        "external_routing_num": [
-          "987654321"
-        ],
-        "uuid": [
-          "7fbdc5e6-c698-4b97-a6c3-2363f55d37ac"
         ]
       },
       "Method": "POST",

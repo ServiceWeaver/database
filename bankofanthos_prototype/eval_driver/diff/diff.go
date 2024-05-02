@@ -32,7 +32,7 @@ func printDiff(diff string) string {
 
 // outputEq compares two files content, print out the diff and return
 // a equal bool.
-func OutputEq(path1 string, path2 string, compareType string) (bool, error) {
+func OutputEq(path1 string, path2 string) (bool, error) {
 	output1, err := os.ReadFile(path1)
 	if err != nil {
 		return false, err

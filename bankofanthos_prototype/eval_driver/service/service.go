@@ -14,43 +14,28 @@ import (
 	"time"
 
 	"bankofanthos_prototype/eval_driver/dbbranch"
+	"bankofanthos_prototype/eval_driver/utility"
 
 	"golang.org/x/net/publicsuffix"
 )
 
-var (
-	configPath = "configs/"
-	logPath    = "logs/"
-	outPath    = "out/"
-	reqPath    = "../tester/reqlog.json"
-)
-
-// ProdService defines binary will be running in prod
-type ProdService struct {
-	ConfigPath string
-	Bin        string
-	ListenPort string
-}
-
 type Service struct {
 	ConfigPaths  []string
 	Runs         string
-	ListenPorts  []string
 	OutputPath   string
 	LogPath      string
-	ProdServices []ProdService
+	ProdServices []*utility.ProdService
 	Branches     map[string]*dbbranch.Branch
 
 	ReqPorts []string
 	Request  *Request
 }
 
-func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts []string, branches map[string]*dbbranch.Branch, request *Request) (*Service, error) {
+func Init(curRun int, prodServices []*utility.ProdService, reqPorts []string, branches map[string]*dbbranch.Branch, request *Request, configLoader *utility.ConfigLoader) (*Service, error) {
 	service := &Service{
 		Runs:         fmt.Sprintf("%d", curRun),
-		ListenPorts:  listenPorts,
-		LogPath:      fmt.Sprintf("%slog%d", logPath, curRun),
-		OutputPath:   fmt.Sprintf("%sresp%d", outPath, curRun),
+		LogPath:      fmt.Sprintf("%slog%d", configLoader.GetLogPath(), curRun),
+		OutputPath:   fmt.Sprintf("%sresp%d", configLoader.GetOutPath(), curRun),
 		ProdServices: prodServices,
 		Branches:     branches,
 		ReqPorts:     reqPorts,
@@ -58,12 +43,12 @@ func Init(curRun int, listenPorts []string, prodServices []ProdService, reqPorts
 	}
 
 	for i := 0; i < len(prodServices); i++ {
-		service.ConfigPaths = append(service.ConfigPaths, fmt.Sprintf("%sweaver%d-%d.toml", configPath, curRun, i))
+		service.ConfigPaths = append(service.ConfigPaths, fmt.Sprintf("%sweaver%d-%d.toml", configLoader.GetConfigPath(), curRun, i))
 	}
 
 	// generate config
 	for i := 0; i < len(prodServices); i++ {
-		err := service.generateConfig(service.ConfigPaths[i], listenPorts[i], prodServices[i])
+		err := service.generateConfig(service.ConfigPaths[i], prodServices[i].TestListenPort, prodServices[i])
 		if err != nil {
 			return service, err
 		}
@@ -88,7 +73,7 @@ func (s *Service) writeOutput(output, outPath string) error {
 }
 
 // generateConfig creates a config file for each run with snapshot database url
-func (s *Service) generateConfig(configPath, listenPort string, prodService ProdService) error {
+func (s *Service) generateConfig(configPath, listenPort string, prodService *utility.ProdService) error {
 	configByte, err := os.ReadFile(prodService.ConfigPath)
 	if err != nil {
 		return err
