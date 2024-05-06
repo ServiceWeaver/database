@@ -9,6 +9,7 @@ outPath = "generated/out/"
 prodPort = "9000"
 databases = {"accountsdb"="postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable","postgresdb"="postgresql://admin:admin@localhost:5432/postgresdb?sslmode=disable"}
 requestPath = "../tester/reqlog.json"
+nonDeterministicDbFields = {"accountsdb"={"users"=["passhash","accountid"]},"postgresdb"={"transactions"=["timestamp"]}}
 
 [stable]
 port = "9001"

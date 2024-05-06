@@ -14,9 +14,10 @@ type generatedPath struct {
 }
 
 type info struct {
-	ProdPort    string
-	Databases   map[string]string
-	RequestPath string
+	ProdPort                 string
+	Databases                map[string]string
+	RequestPath              string
+	NonDeterministicDbFields map[string]map[string][]string
 }
 
 type testService struct {
@@ -108,4 +109,8 @@ func (c *ConfigLoader) GetLogPath() string {
 
 func (c *ConfigLoader) GetConfigPath() string {
 	return c.GeneratedPath.ConfigPath
+}
+
+func (c *ConfigLoader) GetNonDeterministicField() map[string]map[string][]string {
+	return c.Info.NonDeterministicDbFields
 }

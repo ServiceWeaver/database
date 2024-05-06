@@ -32,7 +32,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dbDiff := newDbDiff(connPool, "rid")
+	dbDiff := newDbDiff(connPool, "rid", nil, "generated_id")
 
 	t.Run("DumpView", func(t *testing.T) {
 		err = createTriggers(ctx, connPool, cloneDdl.clonedTables["users"])
@@ -249,7 +249,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool, "rid")
+		dbDiff := newDbDiff(connPool, "rid", nil, "generated_id")
 
 		_, err = connPool.Exec(ctx,
 			`
@@ -271,7 +271,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		trimPlus, trimMinus, err := dbDiff.trimClonedTable(ctx, updatedA)
+		trimPlus, trimMinus, err := dbDiff.trimClonedTable(ctx, updatedA.Plus, updatedA.Minus)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -390,14 +390,13 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool, "rid")
+		dbDiff := newDbDiff(connPool, "rid", nil, "generated_id")
 		updatedA, updatedB, err := dbDiff.getclonedTablesAtNReqs(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"], 1)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		rowDiffs, err := dbDiff.getNonPrimaryKeyRowDiff(ctx, updatedA, updatedB)
-
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -524,7 +523,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool, "rid")
+		dbDiff := newDbDiff(connPool, "rid", nil, "generated_id")
 
 		updatedA, updatedB, err := dbDiff.getclonedTablesAtNReqs(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"], 1)
 		if err != nil {
@@ -672,7 +671,7 @@ func TestCloneDatabaseDiffs(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbDiff := newDbDiff(connPool, "rid")
+		dbDiff := newDbDiff(connPool, "rid", nil, "generated_id")
 		rowDiffs, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, cloneDdl.clonedTables["a"], cloneDdl.clonedTables["b"], 3)
 		if err != nil {
 			t.Fatal(err)

@@ -15,7 +15,7 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-func runTrail(ctx context.Context, trail *utility.Trail, branchers map[string]*dbbranch.Brancher, v1ProdService, v2ProdService *utility.ProdService, req *service.Request, configLoader *utility.ConfigLoader) (*service.Service, error) {
+func runTrail(ctx context.Context, trail *utility.Trail, branchers map[string]*dbbranch.Brancher, v1ProdService, v2ProdService *utility.ProdService, req *service.Request, configLoader *utility.ConfigLoader, skippedCols map[string]map[string][]string) (*service.Service, error) {
 	branchMap := map[string]*dbbranch.Branch{}
 	for name, brancher := range branchers {
 		b, err := brancher.Branch(ctx, trail.Name)
@@ -52,7 +52,7 @@ func runTrail(ctx context.Context, trail *utility.Trail, branchers map[string]*d
 	return s, nil
 }
 
-func printDbDiffs(ctx context.Context, branchers map[string]*dbbranch.Brancher, runName, outPath string, branchA, branchB map[string]*dbbranch.Branch, inlineDiff bool, reqCnt int) {
+func printDbDiffs(ctx context.Context, branchers map[string]*dbbranch.Brancher, runName, outPath string, branchA, branchB map[string]*dbbranch.Branch, inlineDiff bool, reqCnt int, skippedCols map[string]map[string][]string) {
 	f, err := os.Create(fmt.Sprintf("%sDiffPerReq_%s", outPath, runName))
 	if err != nil {
 		log.Panicf("Failed to create file: %v", err)
@@ -60,22 +60,22 @@ func printDbDiffs(ctx context.Context, branchers map[string]*dbbranch.Brancher, 
 	defer f.Close()
 
 	for name, brancher := range branchers {
-		branchDiffs, err := brancher.ComputeDiffAtN(ctx, branchA[name], branchB[name], reqCnt)
+		branchDiffs, err := brancher.ComputeDiffAtN(ctx, branchA[name], branchB[name], reqCnt, skippedCols[name])
 		if err != nil {
 			log.Panicf("failed to compute diff: %v", err)
 		}
-		dbDiffOut, err := diff.DisplayDiff(branchDiffs, inlineDiff)
+		dbDiffOut, err := diff.DisplayDiff(branchDiffs, inlineDiff, skippedCols[name])
 		if err != nil {
 			log.Panicf("failed to display inline diff: %v", err)
 		}
 		fmt.Println(dbDiffOut)
 
-		branchDiffPerReqs, err := brancher.ComputeDiffPerReq(ctx, branchA[name], branchB[name], reqCnt)
+		branchDiffPerReqs, err := brancher.ComputeDiffPerReq(ctx, branchA[name], branchB[name], reqCnt, skippedCols[name])
 		if err != nil {
 			log.Panicf("failed to compute diff: %v", err)
 		}
 		for n, diffPerReq := range branchDiffPerReqs {
-			dbDiffOutPerReq, err := diff.DisplayDiff(diffPerReq, inlineDiff)
+			dbDiffOutPerReq, err := diff.DisplayDiff(diffPerReq, inlineDiff, skippedCols[name])
 			if err != nil {
 				log.Panicf("failed to display diff per req: %v", err)
 			}
@@ -103,6 +103,7 @@ func main() {
 	// get the service running in prod
 	v1ProdService := configLoader.GetStableService()
 	v2ProdService := configLoader.GetCanaryService()
+	skippedCols := configLoader.GetNonDeterministicField()
 
 	ctx := context.Background()
 
@@ -126,7 +127,7 @@ func main() {
 
 	var controlService *service.Service
 	for _, trail := range trails {
-		service, err := runTrail(ctx, trail, branchers, v1ProdService, v2ProdService, request, configLoader)
+		service, err := runTrail(ctx, trail, branchers, v1ProdService, v2ProdService, request, configLoader, skippedCols)
 		if err != nil {
 			log.Panicf("trail run failed: %v", err)
 		}
@@ -147,7 +148,7 @@ func main() {
 			if err != nil {
 				log.Panicf("Failed to compare two outputs: %v", err)
 			}
-			printDbDiffs(ctx, branchers, trail.Name, configLoader.GetOutPath(), controlService.Branches, service.Branches, inlineDiff, request.Count)
+			printDbDiffs(ctx, branchers, trail.Name, configLoader.GetOutPath(), controlService.Branches, service.Branches, inlineDiff, request.Count, skippedCols)
 		}
 	}
 

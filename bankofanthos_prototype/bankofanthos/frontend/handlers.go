@@ -245,7 +245,7 @@ func (s *server) paymentHandler(w http.ResponseWriter, r *http.Request) {
 		FromAccountNum: authenticatedAccountID,
 		FromRoutingNum: s.config.localRoutingNum,
 		ToAccountNum:   recipient,
-		ToRoutingNum:   s.config.localRoutingNum,
+		ToRoutingNum:   "000000000",
 		Amount:         int64(paymentAmount),
 		Timestamp:      time.Now(),
 	}

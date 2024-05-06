@@ -94,7 +94,7 @@ func (b *Branch) IncrementReqId(ctx context.Context) error {
 }
 
 // For each two branch, compare each table and get rowDiffs for each table
-func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n int) (map[string]*Diff, error) {
+func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n int, skipCols map[string][]string) (map[string]*Diff, error) {
 	aTables := maps.Keys(A.clonedDdl.clonedTables)
 	bTables := maps.Keys(B.clonedDdl.clonedTables)
 	sort.Strings(aTables)
@@ -106,7 +106,7 @@ func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n i
 	diffs := map[string]*Diff{}
 	for tableName, clonedTableA := range A.clonedDdl.clonedTables {
 		clonedTableB := B.clonedDdl.clonedTables[tableName]
-		dbDiff := newDbDiff(b.db, clonedTableA.Counter.Colname)
+		dbDiff := newDbDiff(b.db, clonedTableA.Counter.Colname, skipCols, clonedTableA.IdCol)
 
 		diff, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, clonedTableA, clonedTableB, n)
 		if err != nil {
@@ -119,10 +119,10 @@ func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n i
 }
 
 // For each two branch, compare each table and get rowDiffs for each table at each request id
-func (b *Brancher) ComputeDiffPerReq(ctx context.Context, A *Branch, B *Branch, N int) ([]map[string]*Diff, error) {
+func (b *Brancher) ComputeDiffPerReq(ctx context.Context, A *Branch, B *Branch, N int, skipCols map[string][]string) ([]map[string]*Diff, error) {
 	var reqMaps []map[string]*Diff
 	for n := 0; n < N; n++ {
-		diffs, err := b.ComputeDiffAtN(ctx, A, B, n)
+		diffs, err := b.ComputeDiffAtN(ctx, A, B, n, skipCols)
 		if err != nil {
 			return nil, err
 		}

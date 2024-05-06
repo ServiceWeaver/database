@@ -23,15 +23,18 @@ type inlineFormatter struct {
 	control      [][]atom
 	experimental [][]atom
 	w            io.Writer
+
+	skipCols []string
 }
 
-func newInlineFormatter(w io.Writer, tableDiff *dbbranch.Diff, tableName string) *inlineFormatter {
+func newInlineFormatter(w io.Writer, tableDiff *dbbranch.Diff, tableName string, skipCols []string) *inlineFormatter {
 	return &inlineFormatter{
 		tableDiff: tableDiff,
 		tableName: tableName,
 		width:     0,
 		widths:    make([]int, len(tableDiff.ColNames)+1), // +1 for extra "Prefix" column
 		w:         w,
+		skipCols:  skipCols,
 	}
 }
 
@@ -92,7 +95,7 @@ func (i *inlineFormatter) format() error {
 	// for each row
 	prefix := []string{baselinePrefix, controlPrefix, experimentalPrefix}
 	for r := 0; r < len(i.baseline); r++ {
-		boldUnequalColumns(i.baseline[r], i.control[r], i.experimental[r])
+		boldUnequalColumns(i.baseline[r], i.control[r], i.experimental[r], i.tableDiff.ColNames, i.skipCols)
 
 		texts := [][]atom{i.baseline[r], i.control[r], i.experimental[r]}
 		for p, text := range texts {

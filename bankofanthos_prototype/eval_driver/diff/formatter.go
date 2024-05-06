@@ -31,7 +31,7 @@ func (a atom) String() string {
 	return b.String()
 }
 
-func boldUnequalColumns(baseline, control, experimental []atom) {
+func boldUnequalColumns(baseline, control, experimental []atom, cols []string, skippedCols []string) {
 	var rows [][]atom
 	for _, row := range [][]atom{baseline, control, experimental} {
 		if len(row) > 0 {
@@ -39,8 +39,17 @@ func boldUnequalColumns(baseline, control, experimental []atom) {
 		}
 	}
 
+	skippedColSet := map[string]struct{}{}
+	for _, skipped := range skippedCols {
+		skippedColSet[skipped] = struct{}{}
+	}
+
 	for col := range rows[0] {
 		allEqual := true
+		colName := cols[col]
+		if _, exist := skippedColSet[colName]; exist {
+			continue
+		}
 		for _, row := range rows {
 			if row[col] != rows[0][col] {
 				allEqual = false
@@ -105,17 +114,17 @@ func stringifyRows(left []*dbbranch.Row, middle []*dbbranch.Row, right []*dbbran
 	return control, baseline, experimental, nil
 }
 
-func DisplayDiff(branchDiffs map[string]*dbbranch.Diff, displayInlineDiff bool) (string, error) {
+func DisplayDiff(branchDiffs map[string]*dbbranch.Diff, displayInlineDiff bool, skipCols map[string][]string) (string, error) {
 	var b strings.Builder
 	for tableName, tableDiff := range branchDiffs {
 		if displayInlineDiff {
-			formatter := newInlineFormatter(&b, tableDiff, tableName)
+			formatter := newInlineFormatter(&b, tableDiff, tableName, skipCols[tableName])
 			err := formatter.flush()
 			if err != nil {
 				return "", err
 			}
 		} else {
-			formatter := newSideBySideDiffFormatter(&b, tableDiff, tableName)
+			formatter := newSideBySideDiffFormatter(&b, tableDiff, tableName, skipCols[tableName])
 			err := formatter.flush()
 			if err != nil {
 				return "", err

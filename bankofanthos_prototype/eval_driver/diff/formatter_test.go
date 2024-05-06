@@ -60,7 +60,7 @@ var tableDiff = &dbbranch.Diff{
 }
 
 func TestInlineDiffFormat(t *testing.T) {
-	output, err := DisplayDiff(map[string]*dbbranch.Diff{"user": tableDiff}, true)
+	output, err := DisplayDiff(map[string]*dbbranch.Diff{"user": tableDiff}, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestInlineDiffFormat(t *testing.T) {
 }
 
 func TestSideBySideDiffFormat(t *testing.T) {
-	output, err := DisplayDiff(map[string]*dbbranch.Diff{"user": tableDiff}, false)
+	output, err := DisplayDiff(map[string]*dbbranch.Diff{"user": tableDiff}, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

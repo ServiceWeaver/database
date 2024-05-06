@@ -17,14 +17,17 @@ type sideBySideDiffFormatter struct {
 	control      [][]atom
 	experimental [][]atom
 	w            io.Writer
+
+	skipCols []string
 }
 
-func newSideBySideDiffFormatter(w io.Writer, tableDiff *dbbranch.Diff, tableName string) *sideBySideDiffFormatter {
+func newSideBySideDiffFormatter(w io.Writer, tableDiff *dbbranch.Diff, tableName string, skipCols []string) *sideBySideDiffFormatter {
 	return &sideBySideDiffFormatter{
 		tableDiff: tableDiff,
 		tableName: tableName,
 		widths:    make([]int, len(tableDiff.ColNames)),
 		w:         w,
+		skipCols:  skipCols,
 	}
 }
 
@@ -88,7 +91,7 @@ func (s *sideBySideDiffFormatter) format() error {
 
 	// for each row
 	for r := 0; r < len(s.baseline); r++ {
-		boldUnequalColumns(s.baseline[r], s.control[r], s.experimental[r])
+		boldUnequalColumns(s.baseline[r], s.control[r], s.experimental[r], s.tableDiff.ColNames, s.skipCols)
 
 		texts := [][]atom{s.control[r], s.baseline[r], s.experimental[r]}
 		for i, text := range texts {
