@@ -72,7 +72,8 @@ func (udb *userDB) generateAccountID(accountIdLength int, username string) strin
 		if accountIdLength == 10 {
 			accountID = fmt.Sprint(rand.Int63n(1e10-1e9) + 1e9)
 		} else {
-			accountID = fmt.Sprintf("00%d", rand.Int63n(1e10-1e9)+1e9)
+			// accountID = fmt.Sprintf("00%d", rand.Int63n(1e10-1e9)+1e9)
+			accountID = fmt.Sprint(rand.Int63n(1e12-1e11) + 1e11)
 		}
 		// end of [BUG]
 		var user User
