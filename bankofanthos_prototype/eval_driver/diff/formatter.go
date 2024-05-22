@@ -4,6 +4,7 @@ import (
 	"bankofanthos_prototype/eval_driver/dbbranch"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Code string
@@ -71,7 +72,22 @@ func stringifyRow(row *dbbranch.Row) ([]string, error) {
 
 	var rowSlice []string
 	for _, col := range *row {
-		rowSlice = append(rowSlice, fmt.Sprintf("%v", col))
+		value := fmt.Sprintf("%v", col)
+		if b, ok := col.([]byte); ok {
+			value = string(b)
+		}
+		if t, ok := col.(time.Time); ok {
+
+			year, month, day := t.Date()
+			hour, minute, sec := t.Clock()
+			if hour == 0 && minute == 0 && sec == 0 {
+				value = fmt.Sprintf("%04d-%02d-%02d", year, int(month), day)
+			} else {
+				value = fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, int(month), day, hour, minute, sec)
+			}
+
+		}
+		rowSlice = append(rowSlice, fmt.Sprintf("%v", value))
 	}
 
 	return rowSlice, nil
@@ -108,6 +124,10 @@ func stringifyRows(left []*dbbranch.Row, middle []*dbbranch.Row, right []*dbbran
 func DisplayDiff(branchDiffs map[string]*dbbranch.Diff, displayInlineDiff bool) (string, error) {
 	var b strings.Builder
 	for tableName, tableDiff := range branchDiffs {
+		// skip empty tables
+		if len(tableDiff.Baseline) == 0 {
+			continue
+		}
 		if displayInlineDiff {
 			formatter := newInlineFormatter(&b, tableDiff, tableName)
 			err := formatter.flush()

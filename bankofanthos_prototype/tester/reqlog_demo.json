@@ -1,0 +1,94 @@
+{
+  "HttpReqs": [
+    {
+      "Body": {
+        "address": [
+          "111 8th Avenue, New York"
+        ],
+        "birthday": [
+          "2024-4-1"
+        ],
+        "country": [
+          "United States"
+        ],
+        "firstname": [
+          "hello"
+        ],
+        "lastname": [
+          "world"
+        ],
+        "password": [
+          "1234"
+        ],
+        "password-repeat": [
+          "1234"
+        ],
+        "ssn": [
+          "111-11-1111"
+        ],
+        "state": [
+          "NY"
+        ],
+        "timezone": [
+          "-5"
+        ],
+        "username": [
+          "demo"
+        ],
+        "zip": [
+          "10011"
+        ]
+      },
+      "Method": "POST",
+      "Url": "http://localhost:9000/signup"
+    },
+    {
+      "Body": {
+        "account": [
+          "add"
+        ],
+        "amount": [
+          "500"
+        ],
+        "external_account_num": [
+          "1234567890"
+        ],
+        "external_label": [
+          ""
+        ],
+        "external_routing_num": [
+          "123456789"
+        ],
+        "uuid": [
+          "8387987a-9785-45bd-ada5-89f2a91a9135"
+        ]
+      },
+      "Method": "POST",
+      "Url": "http://localhost:9000/deposit"
+    },
+    {
+      "Body": {
+        "account_num": [
+          "add"
+        ],
+        "amount": [
+          "100"
+        ],
+        "contact_account_num": [
+          "3109957291"
+        ],
+        "contact_label": [
+          ""
+        ],
+        "external_routing_num": [
+          "678089733"
+        ],
+        "uuid": [
+          "a3cb5ada-66b9-4b0a-9976-d7e6d273b02d"
+        ]
+      },
+      "Method": "POST",
+      "Url": "http://localhost:9000/payment"
+    }
+  ]
+}

@@ -150,8 +150,12 @@ func validateTransaction(localRoutingNum, authedAcct string, t *model.Transactio
 	}
 	// end of [BUG]
 
-	if !acctRegex.MatchString(t.FromAccountNum) || !acctRegex.MatchString(t.ToAccountNum) {
-		return fmt.Errorf("invalid transaction: Invalid account details: %s %s", t.FromAccountNum, t.ToAccountNum)
+	if !acctRegex.MatchString(t.FromAccountNum) {
+		return fmt.Errorf("invalid transaction: Invalid account %s: account length expected %d actual %d", t.FromAccountNum, accountIdLength, len(t.FromAccountNum))
+	}
+
+	if !acctRegex.MatchString(t.ToAccountNum) {
+		return fmt.Errorf("invalid transaction: Invalid account %s: account length expected %d actual %d", t.ToAccountNum, accountIdLength, len(t.ToAccountNum))
 	}
 
 	if !routeRegex.MatchString(t.FromRoutingNum) || !routeRegex.MatchString(t.ToRoutingNum) {

@@ -88,7 +88,9 @@ func main() {
 	// parse flags
 	var configFile string
 	var deleteBranches, inlineDiff bool
-	flag.StringVar(&configFile, "configFile", "config.toml", "Config file for eval")
+	var expCnt int
+	flag.StringVar(&configFile, "configFile", "config1.toml", "Config file for eval")
+	flag.IntVar(&expCnt, "expCnt", 3, "experimental run cnt")
 	flag.BoolVar(&deleteBranches, "deleteBranches", true, "Delete branches at the end of eval run, only set false for investigation purpose")
 	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or not")
 	flag.Parse()
@@ -125,7 +127,7 @@ func main() {
 	}
 
 	var controlService *service.Service
-	for _, trail := range trails {
+	for i, trail := range trails {
 		service, err := runTrail(ctx, trail, branchers, v1ProdService, v2ProdService, request, configLoader)
 		if err != nil {
 			log.Panicf("trail run failed: %v", err)
@@ -148,6 +150,9 @@ func main() {
 				log.Panicf("Failed to compare two outputs: %v", err)
 			}
 			printDbDiffs(ctx, branchers, trail.Name, configLoader.GetOutPath(), controlService.Branches, service.Branches, inlineDiff, request.Count)
+		}
+		if i == expCnt {
+			break
 		}
 	}
 
