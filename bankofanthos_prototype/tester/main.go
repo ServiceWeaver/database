@@ -13,7 +13,7 @@ const reqLog = "reqlog.json" //req log file
 func main() {
 	var countsList string
 
-	flag.StringVar(&countsList, "counts", "6, 9", "Req count per user, must be >= 3, split by,")
+	flag.StringVar(&countsList, "counts", "3, 3", "Deposit/Withdraw req count per user, must be in [0,100], split by,")
 	flag.Parse()
 
 	var counts []int
@@ -23,8 +23,8 @@ func main() {
 		if err != nil {
 			log.Panicf("failed to parse count, err=%s", err)
 		}
-		if i < 3 || i > 100 {
-			fmt.Println("WARNING: Please provide req count between 3 to 100")
+		if i < 0 || i > 100 {
+			fmt.Println("WARNING: Please provide req count between 0 to 100")
 			return
 		}
 		counts = append(counts, i)

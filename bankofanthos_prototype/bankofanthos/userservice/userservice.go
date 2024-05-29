@@ -15,8 +15,10 @@
 package userservice
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -64,6 +66,7 @@ type config struct {
 	TokenExpirySeconds int    `toml:"token_expiry_seconds"`
 	PrivateKeyPath     string `toml:"private_key_path"`
 	AccountIdLength    int    `toml:"account_id_length"`
+	HashingAlgorithmV1 bool   `toml:"hashing_algorithm_v1"`
 }
 
 type impl struct {
@@ -118,16 +121,12 @@ func (i *impl) CreateUser(ctx context.Context, r CreateUserRequest) error {
 		return err
 	}
 	i.Logger(ctx).Info("Creating password hash.")
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.MinCost)
-	if err != nil {
-		return err
-	}
+
 	accountID := i.db.generateAccountID(i.Config().AccountIdLength)
 
 	userData := User{
 		AccountID: accountID,
 		Username:  r.Username,
-		Passhash:  passwordHash,
 		Firstname: r.FirstName,
 		Lastname:  r.LastName,
 		Birthday:  r.Birthday,
@@ -137,6 +136,20 @@ func (i *impl) CreateUser(ctx context.Context, r CreateUserRequest) error {
 		Zip:       r.Zip,
 		SSN:       r.Ssn,
 	}
+
+	// [BUG2] backward/forward compatible with baseline
+	if !i.Config().HashingAlgorithmV1 {
+		passwordHash := make([]byte, base64.StdEncoding.EncodedLen(len(r.Password)))
+		base64.StdEncoding.Encode(passwordHash, []byte(r.Password))
+		userData.Passhash = passwordHash
+	} else {
+		passwordHash, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.MinCost)
+		if err != nil {
+			return err
+		}
+		userData.Passhash = passwordHash
+	}
+	// END OF [BUG2]
 
 	return i.db.addUser(userData)
 }
@@ -152,9 +165,24 @@ func (i *impl) Login(ctx context.Context, r LoginRequest) (string, error) {
 		return "", err
 	}
 	i.Logger(ctx).Debug("Validating the password.")
-	if err := bcrypt.CompareHashAndPassword(user.Passhash, []byte(r.Password)); err != nil {
-		return "", err
+
+	// [BUG2] backward/forward compatible with baseline
+	if !i.Config().HashingAlgorithmV1 {
+		decoded := make([]byte, base64.StdEncoding.DecodedLen(len(user.Passhash)))
+		_, err = base64.StdEncoding.Decode(decoded, user.Passhash)
+		if err != nil {
+			return "", err
+		}
+
+		if string(bytes.TrimRight(decoded, "\x00")) != r.Password {
+			return "", err
+		}
+	} else {
+		if err := bcrypt.CompareHashAndPassword(user.Passhash, []byte(r.Password)); err != nil {
+			return "", err
+		}
 	}
+	// END OF [BUG2]
 
 	i.Logger(ctx).Debug("Creating jwt token.")
 	payload := jwt.MapClaims{

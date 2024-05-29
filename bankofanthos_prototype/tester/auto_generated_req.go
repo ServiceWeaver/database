@@ -18,6 +18,7 @@ type generator struct {
 	f        *os.File
 	httpReqs []service.HttpReq
 	counts   []int
+	users    []*user
 }
 type user struct {
 	AccountId string
@@ -158,15 +159,9 @@ func (g *generator) write() error {
 	return nil
 }
 
-// generateReqPerUser generates n count request for one new user
-// request method will always be: signup, login, deposit... , send..., logout
-func (g *generator) generateReqPerUser(n int) error {
-	n -= 3 // decrease signup/login/logout count
-
-	user, err := g.signUp()
-	if err != nil {
-		return err
-	}
+// generateReqPerUser generates n deposit/withdraws request for one new user
+// request method will always be: login, deposit... , send..., logout
+func (g *generator) generateReqPerUser(n int, user *user) error {
 	if err := g.login(user); err != nil {
 		return err
 	}
@@ -186,9 +181,26 @@ func (g *generator) generateReqPerUser(n int) error {
 	return g.logout()
 }
 
+func (g *generator) generateUser() (*user, error) {
+	user, err := g.signUp()
+	if err != nil {
+		return nil, err
+	}
+
+	return user, g.logout()
+}
+
 func (g *generator) generate() error {
-	for _, c := range g.counts {
-		if err := g.generateReqPerUser(c); err != nil {
+	for range len(g.counts) {
+		user, err := g.generateUser()
+		if err != nil {
+			return err
+		}
+		g.users = append(g.users, user)
+	}
+
+	for i, c := range g.counts {
+		if err := g.generateReqPerUser(c, g.users[i]); err != nil {
 			return fmt.Errorf("failed to generate requests per user, err=%s", err)
 		}
 	}
