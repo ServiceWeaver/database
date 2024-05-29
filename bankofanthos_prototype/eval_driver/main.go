@@ -87,10 +87,11 @@ func printDbDiffs(ctx context.Context, branchers map[string]*dbbranch.Brancher, 
 func main() {
 	// parse flags
 	var configFile string
-	var deleteBranches, inlineDiff bool
+	var deleteBranches, inlineDiff, respDiff bool
 	flag.StringVar(&configFile, "configFile", "config.toml", "Config file for eval")
 	flag.BoolVar(&deleteBranches, "deleteBranches", true, "Delete branches at the end of eval run, only set false for investigation purpose")
 	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or not")
+	flag.BoolVar(&respDiff, "respDiff", true, "Whether to show response diff or not")
 	flag.Parse()
 
 	configLoader, err := utility.LoadConfig(configFile)
@@ -130,22 +131,25 @@ func main() {
 		if err != nil {
 			log.Panicf("trail run failed: %v", err)
 		}
-		for _, branch := range service.Branches {
-			defer func() {
+		defer func() {
+			for _, branch := range service.Branches {
 				if deleteBranches {
 					err = branch.Delete(ctx)
 					if err != nil {
 						log.Panicf("Delete failed: %v", err)
 					}
 				}
-			}()
-		}
+			}
+		}()
+
 		if trail.IsControl() {
 			controlService = service
 		} else {
-			_, err = diff.OutputEq(controlService.OutputPath, service.OutputPath)
-			if err != nil {
-				log.Panicf("Failed to compare two outputs: %v", err)
+			if respDiff {
+				_, err = diff.OutputEq(controlService.OutputPath, service.OutputPath)
+				if err != nil {
+					log.Panicf("Failed to compare two outputs: %v", err)
+				}
 			}
 			printDbDiffs(ctx, branchers, trail.Name, configLoader.GetOutPath(), controlService.Branches, service.Branches, inlineDiff, request.Count)
 		}

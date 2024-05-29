@@ -41,3 +41,4 @@ token_expiry_seconds = 3600
 private_key_path = "/tmp/.ssh/jwtRS256.key"
 account_db_uri = "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable"
 account_id_length = 12
+hashing_algorithm_v1 = true
