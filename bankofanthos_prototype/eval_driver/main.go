@@ -121,7 +121,10 @@ func main() {
 			log.Panicf("Connect to DB %s failed with %s: %v", prodDb.Name, prodDb.Url, err)
 		}
 		defer db.Close()
-		brancher := dbbranch.NewBrancher(db)
+		brancher, err := dbbranch.NewBrancher(ctx, db)
+		if err != nil {
+			log.Panicf("Create new branch for DB %s failed with %s: %v", prodDb.Name, prodDb.Url, err)
+		}
 		branchers[prodDb.Name] = brancher
 	}
 
