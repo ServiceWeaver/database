@@ -47,7 +47,7 @@ func NewBrancher(ctx context.Context, db *pgxpool.Pool) (*Brancher, error) {
 
 	// go through the table to see if any table has *snapshot, rename that
 	for name, table := range uncleanedDatabase.Tables {
-		if strings.Contains(name, snapshotSuffix) {
+		if strings.HasSuffix(name, snapshotSuffix) {
 			if err := alterTableName(ctx, db, name[:len(name)-len(snapshotSuffix)], table); err != nil {
 				return nil, err
 			}
