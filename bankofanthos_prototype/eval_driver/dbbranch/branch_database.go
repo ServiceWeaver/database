@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"golang.org/x/exp/maps"
@@ -32,9 +33,40 @@ type Branch struct {
 	committed bool
 }
 
-func NewBrancher(db *pgxpool.Pool) *Brancher {
+func NewBrancher(ctx context.Context, db *pgxpool.Pool) (*Brancher, error) {
+	// make sure the status is clean when creating new branches
+
+	// rename RSnapshot to R if find any
+	uncleanedDatabase := &database{
+		connPool: db,
+		Tables:   map[string]*table{},
+	}
+	if err := uncleanedDatabase.getDatabaseMetadata(ctx); err != nil {
+		return nil, err
+	}
+
+	// go through the table to see if any table has *snapshot, rename that
+	for name, table := range uncleanedDatabase.Tables {
+		if strings.Contains(name, snapshotSuffix) {
+			if err := alterTableName(ctx, db, name[:len(name)-len(snapshotSuffix)], table); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// TODO: here we assume users do not create schema names, need to filter out user-defined schema name
+	schemaNames, err := getAllSchemaNames(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range schemaNames {
+		if err := dropSchemaCascade(ctx, db, name); err != nil {
+			return nil, err
+		}
+	}
+
 	branches := map[string]*Branch{}
-	return &Brancher{db, nil, branches}
+	return &Brancher{db, nil, branches}, nil
 }
 
 func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error) {

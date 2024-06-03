@@ -1,3 +1,6 @@
+-- Manually created trigger examples for postgresdb. These triggers are not used in eval driver.
+-- Eval automatically create triggers
+
 -- DROP VIEW IF EXISTS transactions;
 -- DROP TABLE IF EXISTS transactionsplus;
 -- DROP TABLE IF EXISTS transactionsminus; 

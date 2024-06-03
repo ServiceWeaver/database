@@ -1,9 +1,6 @@
 set -euo pipefail
 
 main() {
-    
-docker stop $(docker ps -q -f "name=postgres") 
-
 docker run \
     --rm \
     --detach \

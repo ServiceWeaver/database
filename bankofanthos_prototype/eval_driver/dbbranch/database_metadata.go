@@ -95,10 +95,9 @@ type database struct {
 }
 
 func newDatabase(ctx context.Context, connPool *pgxpool.Pool) (*database, error) {
-	Tables := map[string]*table{}
 	database := &database{
 		connPool: connPool,
-		Tables:   Tables,
+		Tables:   map[string]*table{},
 	}
 	err := database.getDatabaseMetadata(ctx)
 

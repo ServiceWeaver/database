@@ -1,3 +1,7 @@
+-- Manually created trigger examples for accountsdb. These triggers are not used in eval driver.
+-- Eval automatically create triggers
+
+
 -- DROP VIEW IF EXISTS users;
 -- DROP TABLE IF EXISTS usersplus;
 -- DROP TABLE IF EXISTS usersminus;

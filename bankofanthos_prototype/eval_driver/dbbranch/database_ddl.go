@@ -108,7 +108,7 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 
 	// at the end, rename original snapshot to tablesnapshot and view as the original snapshot name
 	originalName := snapshot.Name
-	err = alterTableName(ctx, c.database.connPool, snapshot.Name+"snapshot", snapshot)
+	err = alterTableName(ctx, c.database.connPool, snapshot.Name+snapshotSuffix, snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to alter table names: %w", err)
 	}
