@@ -33,7 +33,7 @@ func alterViewName(ctx context.Context, connPool *pgxpool.Pool, newName string, 
 }
 
 func dropTable(ctx context.Context, connPool *pgxpool.Pool, name string) error {
-	query := fmt.Sprintf("DROP TABLE %s;", name)
+	query := fmt.Sprintf("DROP TABLE IF EXISTS %s;", name)
 
 	_, err := connPool.Exec(ctx, query)
 
@@ -41,9 +41,23 @@ func dropTable(ctx context.Context, connPool *pgxpool.Pool, name string) error {
 }
 
 func dropView(ctx context.Context, connPool *pgxpool.Pool, name string) error {
-	query := fmt.Sprintf("DROP VIEW %s;", name)
+	query := fmt.Sprintf("DROP VIEW IF EXISTS %s;", name)
 
 	_, err := connPool.Exec(ctx, query)
+	return err
+}
+
+func dropTrigger(ctx context.Context, connPool *pgxpool.Pool, triggerName, tableName string) error {
+	query := fmt.Sprintf("DROP TRIGGER %s ON %s CASCADE;", triggerName, tableName)
+	_, err := connPool.Exec(ctx, query)
+
+	return err
+}
+
+func dropFunction(ctx context.Context, connPool *pgxpool.Pool, name string) error {
+	query := fmt.Sprintf("DROP FUNCTION %s;", name)
+	_, err := connPool.Exec(ctx, query)
+
 	return err
 }
 
@@ -59,8 +73,7 @@ func getAllSchemaNames(ctx context.Context, connPool *pgxpool.Pool) ([]string, e
 	rows, err := connPool.Query(ctx, `
 	SELECT schema_name
 	FROM information_schema.schemata
-	WHERE schema_owner != 'postgres'  
-	AND schema_name NOT LIKE 'pg_%' 
+	WHERE schema_name NOT LIKE 'pg_%' 
 	AND schema_name NOT IN ('information_schema', 'public');`)
 	if err != nil {
 		return nil, err

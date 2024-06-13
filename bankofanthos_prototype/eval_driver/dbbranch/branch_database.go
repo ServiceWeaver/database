@@ -41,6 +41,7 @@ func NewBrancher(ctx context.Context, db *pgxpool.Pool) (*Brancher, error) {
 		connPool: db,
 		Tables:   map[string]*table{},
 	}
+
 	if err := uncleanedDatabase.getDatabaseMetadata(ctx); err != nil {
 		return nil, err
 	}
@@ -48,6 +49,9 @@ func NewBrancher(ctx context.Context, db *pgxpool.Pool) (*Brancher, error) {
 	// go through the table to see if any table has *snapshot, rename that
 	for name, table := range uncleanedDatabase.Tables {
 		if strings.HasSuffix(name, snapshotSuffix) {
+			if err := dropView(ctx, db, name[:len(name)-len(snapshotSuffix)]); err != nil {
+				return nil, err
+			}
 			if err := alterTableName(ctx, db, name[:len(name)-len(snapshotSuffix)], table); err != nil {
 				return nil, err
 			}

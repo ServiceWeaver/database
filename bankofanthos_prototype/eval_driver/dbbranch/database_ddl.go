@@ -11,7 +11,7 @@ import (
 
 const (
 	counterColName = "rid"
-	couterName     = "rid"
+	counterName    = "rid"
 )
 
 type counter struct {
@@ -24,6 +24,9 @@ type clonedTable struct {
 	Minus    *table
 	View     *view
 	Counter  *counter
+
+	Functions []string
+	Triggers  []string
 }
 
 type cloneDdl struct {
@@ -72,15 +75,28 @@ func (c *cloneDdl) createClonedTables(ctx context.Context) error {
 
 func (c *cloneDdl) reset(ctx context.Context) error {
 	for tablename, table := range c.clonedTables {
-		err := c.alterViewSchema(ctx, table.View)
-		if err != nil {
+		// drop all created triggers
+		for _, trigger := range table.Triggers {
+			if err := dropTrigger(ctx, c.database.connPool, trigger, tablename); err != nil {
+				return err
+			}
+		}
+
+		for _, function := range table.Functions {
+			if err := dropFunction(ctx, c.database.connPool, function); err != nil {
+				return err
+			}
+		}
+
+		if err := c.alterViewSchema(ctx, table.View); err != nil {
 			return err
 		}
-		err = alterTableName(ctx, c.database.connPool, tablename, table.Snapshot)
-		if err != nil {
+
+		if err := alterTableName(ctx, c.database.connPool, tablename, table.Snapshot); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -138,7 +154,6 @@ func (c *cloneDdl) alterViewSchema(ctx context.Context, view *view) error {
 	}
 
 	view.Name = c.namespace + "." + view.Name
-
 	return nil
 }
 
@@ -147,6 +162,16 @@ func (c *cloneDdl) createSchema(ctx context.Context, namespace string) error {
 
 	_, err := c.database.connPool.Exec(ctx, query)
 	return err
+}
+
+func (c *cloneDdl) getPrimaryKeyCols(table *table) []string {
+	for _, idx := range table.Indexes {
+		if idx.IsUnique && strings.Contains(idx.Name, "pkey") {
+			return idx.ColumnNames
+		}
+	}
+
+	return nil
 }
 
 // TODO: Pick name for views and plus, minus which does not exist in database
@@ -209,15 +234,59 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 	}
 	sort.Strings(colnames)
 
-	viewQuery := fmt.Sprintf(`
-	CREATE VIEW %s AS
-	SELECT %s FROM %s
-	UNION ALL
-	SELECT %s FROM %s
-	EXCEPT ALL
-	SELECT %s FROM %s
-	ORDER BY %s;
-	`, view.Name, strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), minus.Name, strings.Join(colnames, ", "))
+	pk_cols := c.getPrimaryKeyCols(prodTable)
+	viewQuery := ""
+
+	// Create a view prod table union all plus except all minus
+	if len(pk_cols) == 0 {
+		dCols := make([]string, len(colnames))
+		cCols := make([]string, len(colnames))
+		for i, col := range colnames {
+			dCols[i] = "d." + col
+			cCols[i] = "c." + col
+		}
+
+		viewQuery = fmt.Sprintf(`
+		CREATE OR REPLACE VIEW %s AS(
+		WITH numbered_data AS (
+			SELECT %s, ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s) AS rn 
+			FROM (
+				SELECT %s FROM %s
+				UNION ALL
+				SELECT %s FROM %s
+			) AS data
+		),
+		numbered_c AS (
+			SELECT %s, ROW_NUMBER() OVER (PARTITION BY %s ORDER BY %s) AS rn 
+			FROM %s
+		)
+		SELECT %s
+		FROM numbered_data d
+		LEFT JOIN numbered_c c ON (%s) = (%s) AND d.rn = c.rn
+		WHERE (%s) IS NULL
+		);
+`, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), minus.Name, strings.Join(dCols, ","), strings.Join(dCols, ","), strings.Join(cCols, ","), strings.Join(cCols, ","))
+
+	} else {
+		unionCols := make([]string, len(pk_cols))
+		minusCols := make([]string, len(pk_cols))
+		for i, col := range pk_cols {
+			unionCols[i] = "tmp." + col
+			minusCols[i] = minus.Name + "." + col
+		}
+
+		viewQuery = fmt.Sprintf(`
+		CREATE VIEW %s AS
+		SELECT %s FROM
+		( SELECT %s FROM %s
+		UNION ALL
+		SELECT %s FROM %s) AS tmp
+		WHERE NOT EXISTS(
+		SELECT 1 FROM %s
+		WHERE (%s) = (%s)
+		) ORDER BY %s;
+		`, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, minus.Name, strings.Join(unionCols, ","), strings.Join(minusCols, ","), strings.Join(colnames, ", "))
+	}
 
 	_, err = c.database.connPool.Exec(ctx, viewQuery)
 	if err != nil {
@@ -278,7 +347,8 @@ func (c *cloneDdl) applyRules(ctx context.Context, prodTable *table, view *view)
 
 // TODO: check counter name does not exist
 func (c *cloneDdl) createCounter(ctx context.Context) error {
-	c.counter = &counter{Name: fmt.Sprintf("%s.%s", c.namespace, couterName), Colname: counterColName}
+	c.counter = &counter{Name: fmt.Sprintf("%s.%s", c.namespace, counterName), Colname: counterColName}
+
 	_, err := c.database.connPool.Exec(ctx, fmt.Sprintf("CREATE TABLE %s (id BIGINT);", c.counter.Name))
 	if err != nil {
 		return err

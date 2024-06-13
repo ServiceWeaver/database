@@ -41,14 +41,16 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	sort.Strings(cols)
 	sort.Strings(newCols)
 
+	functionName := fmt.Sprintf("%s_redirect_insert()", clonedTable.View.Name)
+
 	storedProcedureQuery := fmt.Sprintf(`
-	CREATE OR REPLACE FUNCTION %s_redirect_insert()
+	CREATE OR REPLACE FUNCTION %s
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
 	DECLARE %s BIGINT;
 	BEGIN
-	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+	%s := (SELECT id FROM %s);`, functionName, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	// TODO: make it more generic way for auto-generate id
 	if idGeneratorQuery != "" {
@@ -97,12 +99,14 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	$$;
 	`, clonedTable.Plus.Name, strings.Join(cols, ", "), strings.Join(newCols, ", "))
 
+	triggerName := fmt.Sprintf("%s_redirect_insert_trigger", clonedTable.View.Name)
+
 	triggerQuery := fmt.Sprintf(`
-	CREATE OR REPLACE TRIGGER %s_redirect_insert_trigger
+	CREATE OR REPLACE TRIGGER %s
 	INSTEAD OF INSERT ON %s
 	FOR EACH ROW
 	EXECUTE PROCEDURE %s_redirect_insert();
-`, clonedTable.View.Name, clonedTable.View.Name, clonedTable.View.Name)
+`, triggerName, clonedTable.View.Name, clonedTable.View.Name)
 
 	_, err := connPool.Exec(ctx, storedProcedureQuery)
 	if err != nil {
@@ -114,6 +118,8 @@ func createInsertTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 		return err
 	}
 
+	clonedTable.Triggers = append(clonedTable.Triggers, triggerName)
+	clonedTable.Functions = append(clonedTable.Functions, functionName)
 	return nil
 }
 
@@ -130,14 +136,16 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	sort.Strings(oldCols)
 	sort.Strings(newCols)
 
+	functionName := fmt.Sprintf("%s_redirect_update()", clonedTable.View.Name)
+
 	storedProcedureQuery := fmt.Sprintf(`
-	CREATE OR REPLACE FUNCTION %s_redirect_update()
+	CREATE OR REPLACE FUNCTION %s
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
 	DECLARE %s BIGINT;
 	BEGIN
-	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+	%s := (SELECT id FROM %s);`, functionName, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	for _, index := range clonedTable.Snapshot.Indexes {
 		if index.IsUnique {
@@ -201,12 +209,13 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	$$;
 	`, clonedTable.Minus.Name, strings.Join(cols, ", "), strings.Join(oldCols, ", "), clonedTable.Plus.Name, strings.Join(cols, ", "), strings.Join(newCols, ", "))
 
+	triggerName := fmt.Sprintf("%s_redirect_update_trigger", clonedTable.View.Name)
 	triggerQuery := fmt.Sprintf(`
-	CREATE OR REPLACE TRIGGER %s_redirect_update_trigger
+	CREATE OR REPLACE TRIGGER %s
 	INSTEAD OF UPDATE ON %s
 	FOR EACH ROW
 	EXECUTE PROCEDURE %s_redirect_update();
-`, clonedTable.View.Name, clonedTable.View.Name, clonedTable.View.Name)
+`, triggerName, clonedTable.View.Name, clonedTable.View.Name)
 
 	_, err := connPool.Exec(ctx, storedProcedureQuery)
 	if err != nil {
@@ -217,6 +226,9 @@ func createUpdateTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	if err != nil {
 		return err
 	}
+
+	clonedTable.Triggers = append(clonedTable.Triggers, triggerName)
+	clonedTable.Functions = append(clonedTable.Functions, functionName)
 
 	return nil
 }
@@ -231,14 +243,16 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	sort.Strings(cols)
 	sort.Strings(oldCols)
 
+	functionName := fmt.Sprintf("%s_redirect_delete()", clonedTable.View.Name)
+
 	storedProcedureQuery := fmt.Sprintf(`
-	CREATE OR REPLACE FUNCTION %s_redirect_delete()
+	CREATE OR REPLACE FUNCTION %s
 	RETURNS TRIGGER
 	LANGUAGE plpgsql
 	AS $$
 	DECLARE %s BIGINT;
 	BEGIN
-	%s := (SELECT id FROM %s);`, clonedTable.View.Name, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
+	%s := (SELECT id FROM %s);`, functionName, clonedTable.Counter.Colname, clonedTable.Counter.Colname, clonedTable.Counter.Name)
 
 	// TODO: Add other foreign key actions
 	// check if the key is referenced by other table
@@ -270,12 +284,13 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	$$;
 	`, clonedTable.Minus.Name, strings.Join(cols, ", "), strings.Join(oldCols, ", "))
 
+	triggerName := fmt.Sprintf("%s_redirect_delete_trigger", clonedTable.View.Name)
 	triggerQuery := fmt.Sprintf(`
-	CREATE OR REPLACE TRIGGER %s_redirect_delete_trigger
+	CREATE OR REPLACE TRIGGER %s
 	INSTEAD OF DELETE ON %s
 	FOR EACH ROW
 	EXECUTE PROCEDURE %s_redirect_delete();
-`, clonedTable.View.Name, clonedTable.View.Name, clonedTable.View.Name)
+`, triggerName, clonedTable.View.Name, clonedTable.View.Name)
 
 	_, err := connPool.Exec(ctx, storedProcedureQuery)
 	if err != nil {
@@ -286,6 +301,9 @@ func createDeleteTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTab
 	if err != nil {
 		return err
 	}
+
+	clonedTable.Triggers = append(clonedTable.Triggers, triggerName)
+	clonedTable.Functions = append(clonedTable.Functions, functionName)
 
 	return nil
 }
