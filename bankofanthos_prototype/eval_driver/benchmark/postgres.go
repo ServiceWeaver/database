@@ -32,7 +32,10 @@ func (p *postgres) copyTable(table string) error {
 }
 
 func (p *postgres) postgresDiff(table string) error {
-	_, err := p.client.Exec(fmt.Sprintf("SELECT * FROM %s EXCEPT ALL SELECT * FROM %s_copy;", table, table))
+	if _, err := p.client.Exec(fmt.Sprintf("SELECT * FROM %s EXCEPT ALL SELECT * FROM %s_copy;", table, table)); err != nil {
+		return err
+	}
+	_, err := p.client.Exec(fmt.Sprintf("SELECT * FROM %s_copy EXCEPT ALL SELECT * FROM %s;", table, table))
 
 	return err
 }

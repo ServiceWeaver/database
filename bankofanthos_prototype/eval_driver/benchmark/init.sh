@@ -9,30 +9,14 @@ echo "count": $count
 export POSTGRES_DB=benchmark POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres PORT=5433 MIN_LEN=3 MAX_LEN=10
 
 generate_username() {
-    chars='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-
     length=$(( (RANDOM % ($MAX_LEN - $MIN_LEN + 1)) + $MIN_LEN ))
-    string=''
-
-    for (( i=0; i<length; i++ )); do
-    random_index=$((RANDOM % ${#chars}))  
-    string+=${chars:random_index:1}
-    done
-
+    string= tr -dc A-Za-z0-9 </dev/urandom | head -c $length
     echo "$string"
 }
 
 generate_password() {
-    chars='0123456789'
-
     length=$(( (RANDOM % ($MAX_LEN - $MIN_LEN + 1)) + $MIN_LEN ))
-    string=''
-
-    for (( i=0; i<length; i++ )); do
-    random_index=$((RANDOM % ${#chars}))  
-    string+=${chars:random_index:1}
-    done
-
+    string= tr -dc A-Za-z0-9 </dev/urandom | head -c $length
     echo "$string"
 }
 

@@ -36,7 +36,7 @@ Execute Read/Write oprations on new branch
 ## Diffing
 Diff table size X with Y modified rows
 ### Baseline 1: Postgres
-Compare two table with `SELECT * FROM TABLE A EXCEPT ALL SELECT * FROM TABLE B;`
+Compare two table with `SELECT * FROM TABLE A EXCEPT ALL SELECT * FROM TABLE B;` and `SELECT * FROM TABLE B EXCEPT ALL SELECT * FROM TABLE A;`
 
 ### Baseline 2: Dolt
 Diff two branches
