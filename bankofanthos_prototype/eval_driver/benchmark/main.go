@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log"
 	"os"
 	"strings"
 )
@@ -16,7 +16,7 @@ func main() {
 
 	if _, err := os.Stat(dumpDir); os.IsNotExist(err) {
 		if err := os.MkdirAll(dumpDir, 0755); err != nil {
-			fmt.Println("Error creating directory:", err)
+			log.Panicf("Error creating directory, err=%s", err)
 		}
 	}
 
@@ -33,7 +33,7 @@ func main() {
 
 		metrics, err := benchmarkBranching([]string{table, table_pk}, dbName, dbUrl, doltPort, debug)
 		if err != nil {
-			fmt.Printf("benchmark branching failed, err=%s", err)
+			log.Panicf("benchmark branching failed, err=%s", err)
 		}
 		metricsStats[dbName] = metrics
 	}

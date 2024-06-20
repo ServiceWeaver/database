@@ -25,44 +25,41 @@ func createInsertQueries(queryCnt int, table string) []string {
 }
 
 func createDeleteQueries(table string) []string {
-	var queries []string
 
 	query1 := fmt.Sprintf(`
 	DELETE FROM %s
 	WHERE username='abcde';
 		`, table)
-	queries = append(queries, query1)
 
+	queries := []string{query1}
 	return queries
 }
 
 func createReadQueries(table string) []string {
-	var queries []string
+
 	// hard coded some queries
 	query1 := fmt.Sprintf(`
 	SELECT *
 	FROM %s
 	WHERE username = 'aaaa';
 	`, table)
-	queries = append(queries, query1)
 
 	query2 := fmt.Sprintf(`
 	SELECT *
 	FROM %s
 	WHERE LENGTH(password) = 8 AND username LIKE 'a%%';
 	`, table)
-	queries = append(queries, query2)
 
 	query3 := fmt.Sprintf(`
 	SELECT COUNT(*)
 	FROM %s
 	`, table)
-	queries = append(queries, query3)
 
 	query4 := fmt.Sprintf(`
 	SELECT *
 	FROM %s
 	`, table)
-	queries = append(queries, query4)
+
+	queries := []string{query1, query2, query3, query4}
 	return queries
 }

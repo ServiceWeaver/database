@@ -36,11 +36,11 @@ type metrics struct {
 }
 
 func newMetrics(table string, dbUrl string) (*metrics, error) {
-	var writes []*operation
-
-	writes = append(writes, &operation{queries: createInsertQueries(1, table), time: map[string]time.Duration{}})
-	writes = append(writes, &operation{queries: createInsertQueries(10, table), time: map[string]time.Duration{}})
-	writes = append(writes, &operation{queries: createInsertQueries(100, table), time: map[string]time.Duration{}})
+	writes := []*operation{
+		{queries: createInsertQueries(1, table), time: map[string]time.Duration{}},
+		{queries: createInsertQueries(10, table), time: map[string]time.Duration{}},
+		{queries: createInsertQueries(100, table), time: map[string]time.Duration{}},
+	}
 
 	var deletes []*operation
 	delete := &operation{queries: createDeleteQueries(table), time: map[string]time.Duration{}}
