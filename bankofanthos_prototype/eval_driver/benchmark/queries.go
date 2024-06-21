@@ -25,7 +25,6 @@ func createInsertQueries(queryCnt int, table string) []string {
 }
 
 func createDeleteQueries(table string) []string {
-
 	query1 := fmt.Sprintf(`
 	DELETE FROM %s
 	WHERE username='abcde';
@@ -36,7 +35,6 @@ func createDeleteQueries(table string) []string {
 }
 
 func createReadQueries(table string) []string {
-
 	// hard coded some queries
 	query1 := fmt.Sprintf(`
 	SELECT *
