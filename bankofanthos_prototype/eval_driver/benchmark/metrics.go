@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -82,7 +83,17 @@ func (m *metrics) getTableSize() error {
 	if err := p.client.QueryRow(fmt.Sprintf("SELECT pg_size_pretty(pg_total_relation_size('%s'));", m.table)).Scan(&size); err != nil {
 		return err
 	}
-	m.dbSize = size
+
+	if size[len(size)-2:] == "kB" {
+		n, err := strconv.ParseFloat(size[:len(size)-3], 64)
+		if err != nil {
+			return fmt.Errorf("failed to convert string to int, err=%s", err)
+		}
+
+		m.dbSize = fmt.Sprintf("%.2f MB", n/1024)
+	} else {
+		m.dbSize = size
+	}
 
 	p.close()
 	return nil

@@ -20,7 +20,7 @@ func main() {
 		}
 	}
 
-	dbs := []string{"postgresql://postgres:postgres@localhost:5433/benchmark2", "postgresql://postgres:postgres@localhost:5433/benchmark"}
+	dbs := []string{"postgresql://postgres:postgres@localhost:5433/benchmark_1mb", "postgresql://postgres:postgres@localhost:5433/benchmark_20mb", "postgresql://postgres:postgres@localhost:5433/benchmark_100mb"}
 
 	metricsStats := map[string]map[string]*metrics{} // {Database: {table:metrics, table_with_primary_key:metrics}}
 
@@ -36,5 +36,9 @@ func main() {
 			log.Panicf("benchmark branching failed, err=%s", err)
 		}
 		metricsStats[dbName] = metrics
+	}
+
+	if err := plotMetrics(metricsStats); err != nil {
+		log.Panicf("Failed plot metrics, %s", err)
 	}
 }

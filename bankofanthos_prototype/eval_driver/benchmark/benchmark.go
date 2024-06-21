@@ -89,12 +89,6 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 		return fmt.Errorf("failed to create new postgres client, %s", err)
 	}
 
-	for _, q := range m.reads[0].queries {
-		if _, err := pg.client.Exec(q); err != nil {
-			return err
-		}
-	}
-
 	operations := [][]*operation{m.writes, m.deletes, m.reads}
 
 	for _, op := range operations {
