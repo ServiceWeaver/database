@@ -20,9 +20,15 @@ main() {
   psql -U postgres -c "CREATE USER admin WITH SUPERUSER PASSWORD 'admin';"
   psql -U postgres -c "CREATE DATABASE postgresdb WITH OWNER admin;"
   psql -U postgres -c "CREATE DATABASE accountsdb WITH OWNER admin;"
+  psql -U postgres -c "CREATE DATABASE postgresdb_bug WITH OWNER admin;"
   psql postgresdb admin -f /app/postgresdb.sql
   psql accountsdb admin -f /app/accountsdb.sql
+
+  psql postgresdb_bug admin -f /app/postgresdb.sql
+  psql postgresdb_bug admin -c " INSERT INTO CURRENCY(CURRENCY_CODE, VALUE_USD) VALUES('cad',0.73);"
+
   POSTGRES_DB=postgresdb POSTGRES_USER=admin POSTGRES_PASSWORD=admin LOCAL_ROUTING_NUM=883745000 USE_DEMO_DATA=True /app/1_create_transactions.sh
+    POSTGRES_DB=postgresdb_bug POSTGRES_USER=admin POSTGRES_PASSWORD=admin LOCAL_ROUTING_NUM=883745000 USE_DEMO_DATA=True /app/1_create_transactions.sh
 }
 
 main "$@"

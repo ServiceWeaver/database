@@ -38,6 +38,11 @@ readonly ENV_VARS=(
   "LOCAL_ROUTING_NUM"
 )
 
+insert_currency() {
+  PGPASSWORD="$POSTGRES_PASSWORD" psql -p5432 -h 127.0.0.1 -X -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+  INSERT INTO CURRENCY(CURRENCY_CODE, VALUE_USD) VALUES('usd',1.0);
+EOSQL
+}
 
 add_transaction() {
     DATE=$(date -u +"%Y-%m-%d %H:%M:%S.%3N%z" --date="@$(($6))")
@@ -114,6 +119,7 @@ create_ledger() {
   EXTERNAL_ROUTING="808889588"
 
   create_transactions
+  insert_currency
 }
 
 
