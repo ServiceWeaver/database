@@ -60,8 +60,8 @@ go run . -configFile=config_v2.toml
 ```
 
 ### BUG3
-- V1 could successfully load all rows from currency table to memory when service starts
-- V2 could only partial currency table to memory since there is newly inserted rows exceed currency limitation, causing\
+- V1 successfully load all rows from currency table to memory when service starts
+- V2 load partial currency table to memory since there is newly inserted rows exceed currency limitation, causing\
 common currency missing
 - Service restarts with newly inserted rows will cause bugs
 ```shell
