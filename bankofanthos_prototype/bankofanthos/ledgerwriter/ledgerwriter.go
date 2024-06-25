@@ -29,6 +29,8 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+const maxCurrencyCnt = 1
+
 type T interface {
 	// AddTransaction records a new transaction in the transaction database.
 	AddTransaction(ctx context.Context, requestUuid, authenticatedAccount string, transaction model.Transaction) error
@@ -46,6 +48,7 @@ type impl struct {
 	cache         *cache.Cache
 	txnRepo       *transactionRepository
 	balanceReader weaver.Ref[balancereader.T]
+	currency      map[string]float32
 }
 
 func (i *impl) Init(context.Context) error {
@@ -55,6 +58,12 @@ func (i *impl) Init(context.Context) error {
 		return err
 	}
 	i.cache = cache.New(1*time.Hour, 1*time.Minute)
+
+	currency, err := i.txnRepo.getAllCurrency(maxCurrencyCnt)
+	if err != nil {
+		return err
+	}
+	i.currency = currency
 	return nil
 }
 
@@ -89,7 +98,10 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 		}
 
 		updatedAmount := balance - int64(transaction.Amount)
+		updatedAmount = updatedAmount * int64(i.currency["usd"])
+
 		acctId := strings.TrimPrefix(transaction.FromAccountNum, "00")
+
 		if len(acctId) == 10 {
 			acctId = acctId + "  "
 		}
@@ -106,6 +118,8 @@ func (i *impl) AddTransaction(ctx context.Context, requestUuid, authenticatedAcc
 		}
 
 		updatedAmount := balance + int64(transaction.Amount)
+		updatedAmount = updatedAmount * int64(i.currency["usd"])
+
 		acctId := strings.TrimPrefix(transaction.ToAccountNum, "00")
 		if len(acctId) == 10 {
 			acctId = acctId + "  "

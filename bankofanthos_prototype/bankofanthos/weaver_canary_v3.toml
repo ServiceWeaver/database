@@ -1,0 +1,43 @@
+[serviceweaver]
+binary = "./bankofanthos"
+
+[single]
+listeners.bank = {address = "localhost:9000"}
+
+[multi]
+listeners.bank = {address = "localhost:9000"}
+
+["github.com/ServiceWeaver/weaver/Main"]
+public_key_path = "/tmp/.ssh/jwtRS256.key.pub"
+local_routing_num = "883745000"
+bank_name = "Bank of Anthos"
+backend_timeout_seconds = 4
+account_id_length = 10
+
+["bankofanthos_prototype/bankofanthos/balancereader/T"]
+local_routing_num = "883745000"
+data_source_url = "postgresql://admin:admin@localhost:5432/postgresdb_bug?sslmode=disable"
+
+["bankofanthos_prototype/bankofanthos/contacts/T"]
+account_db_uri = "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable"
+public_key_path = "/tmp/.ssh/jwtRS256.key.pub"
+local_routing_num = "883745000"
+
+["bankofanthos_prototype/bankofanthos/ledgerwriter/T"]
+local_routing_num = "883745000"
+data_source_url = "postgresql://admin:admin@localhost:5432/postgresdb_bug?sslmode=disable"
+account_id_length = 10
+
+["bankofanthos_prototype/bankofanthos/transactionhistory/T"]
+local_routing_num = "883745000"
+data_source_url = "postgresql://admin:admin@localhost:5432/postgresdb_bug?sslmode=disable"
+history_limit = 1000
+cache_size = 1000
+cache_minutes = 60
+
+["bankofanthos_prototype/bankofanthos/userservice/T"]
+token_expiry_seconds = 3600
+private_key_path = "/tmp/.ssh/jwtRS256.key"
+account_db_uri = "postgresql://admin:admin@localhost:5432/accountsdb?sslmode=disable"
+account_id_length = 10
+hashing_algorithm_v1 = true

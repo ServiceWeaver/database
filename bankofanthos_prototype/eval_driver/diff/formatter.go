@@ -108,6 +108,9 @@ func stringifyRows(left []*dbbranch.Row, middle []*dbbranch.Row, right []*dbbran
 func DisplayDiff(branchDiffs map[string]*dbbranch.Diff, displayInlineDiff bool) (string, error) {
 	var b strings.Builder
 	for tableName, tableDiff := range branchDiffs {
+		if len(tableDiff.Control) == 0 && len(tableDiff.Experimental) == 0 && len(tableDiff.Baseline) == 0 {
+			continue
+		}
 		if displayInlineDiff {
 			formatter := newInlineFormatter(&b, tableDiff, tableName)
 			err := formatter.flush()

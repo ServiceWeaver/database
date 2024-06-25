@@ -54,3 +54,23 @@ func (r *transactionRepository) updateBalance(acctId string, amount int64) error
 	insert := r.db.Exec(insertSql, acctId, amount)
 	return insert.Error
 }
+
+func (r *transactionRepository) getAllCurrency(maxCurrency int) (map[string]float32, error) {
+	rows, err := r.db.Raw("SELECT currency_code, value_usd FROM Currency ORDER BY currency_code LIMIT ?", maxCurrency).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	m := map[string]float32{}
+	for rows.Next() {
+		var code string
+		var valueUsd float32
+		if err := rows.Scan(&code, &valueUsd); err != nil {
+			return nil, err
+		}
+		m[code] = valueUsd
+	}
+
+	return m, nil
+}

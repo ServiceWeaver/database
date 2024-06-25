@@ -41,3 +41,8 @@ CREATE TABLE balances (
   acctid        CHAR(12)  PRIMARY KEY,
   amount        INT       NOT NULL
 );
+
+CREATE TABLE currency (
+  currency_code CHAR(3) PRIMARY KEY,
+  value_usd FLOAT(8) NOT NULL
+);
