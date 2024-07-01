@@ -26,7 +26,7 @@ func main() {
 
 	metricsStats := map[string]map[string]*metrics{} // {Database: {table:metrics, table_with_primary_key:metrics}}
 
-	for _, dbUrl := range dbs[:2] {
+	for _, dbUrl := range dbs {
 		idx := strings.LastIndex(dbUrl, "/")
 		dbName := dbUrl[idx+1:]
 		doltPort := "3306"
