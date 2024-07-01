@@ -47,15 +47,15 @@ func plotMetrics(metricsStats map[string]map[string]*metrics) error {
 	for _, tableMetrics := range metricsStats {
 		for table, metrics := range tableMetrics {
 			if table == "users_pk" {
-				metrics.dbSize += "(pk)"
+				metrics.TableSize += "(pk)"
 			}
-			branchTimeStats[metrics.dbSize] = metrics.branch.time
-			writeTimeStats[metrics.dbSize] = metrics.writes[2].time   // write 100 rows
-			deleteTimeStats[metrics.dbSize] = metrics.deletes[0].time // 1 delete query
-			readTimeStats[metrics.dbSize] = metrics.reads[0].time     // 4 read query
-			diffTimeStats[metrics.dbSize] = metrics.diffs[2].time     // diff 100 rows
+			branchTimeStats[metrics.TableSize] = metrics.Branch.Time
+			writeTimeStats[metrics.TableSize] = metrics.Writes[2].Time   // write 1000 rows
+			deleteTimeStats[metrics.TableSize] = metrics.Deletes[0].Time // 1 delete query
+			readTimeStats[metrics.TableSize] = metrics.Reads[0].Time     // 1000 read query
+			diffTimeStats[metrics.TableSize] = metrics.Diffs[2].Time     // diff 1000 rows
 		}
-		if err := plotTimeWithTableSize(branchTimeStats, "branch", true); err != nil {
+		if err := plotTimeWithTableSize(branchTimeStats, "branch", false); err != nil {
 			return err
 		}
 		if err := plotTimeWithTableSize(writeTimeStats, "write100Rows", false); err != nil {
@@ -64,10 +64,10 @@ func plotMetrics(metricsStats map[string]map[string]*metrics) error {
 		if err := plotTimeWithTableSize(deleteTimeStats, "delete1Query", false); err != nil {
 			return err
 		}
-		if err := plotTimeWithTableSize(readTimeStats, "read4Query", true); err != nil {
+		if err := plotTimeWithTableSize(readTimeStats, "read1000Query", false); err != nil {
 			return err
 		}
-		if err := plotTimeWithTableSize(diffTimeStats, "diff100Rows", true); err != nil {
+		if err := plotTimeWithTableSize(diffTimeStats, "diff1000Rows", false); err != nil {
 			return err
 		}
 	}
@@ -77,17 +77,17 @@ func plotMetrics(metricsStats map[string]map[string]*metrics) error {
 	diffRowsStats := make(map[string]map[string]time.Duration)
 	for _, tableMetrics := range metricsStats {
 		for _, metrics := range tableMetrics {
-			for _, w := range metrics.writes {
-				if len(writeRowsStats[metrics.dbSize]) == 0 {
-					writeRowsStats[metrics.dbSize] = make(map[string]time.Duration)
+			for _, w := range metrics.Writes {
+				if len(writeRowsStats[metrics.TableSize]) == 0 {
+					writeRowsStats[metrics.TableSize] = make(map[string]time.Duration)
 				}
-				writeRowsStats[metrics.dbSize][fmt.Sprintf("%d row(s)", len(w.queries))] = w.time[RPlusRMinus.String()]
+				writeRowsStats[metrics.TableSize][fmt.Sprintf("%d row(s)", len(w.queries))] = w.Time[RPlusRMinus.String()]
 			}
-			for _, w := range metrics.diffs {
-				if len(diffRowsStats[metrics.dbSize]) == 0 {
-					diffRowsStats[metrics.dbSize] = make(map[string]time.Duration)
+			for _, w := range metrics.Diffs {
+				if len(diffRowsStats[metrics.TableSize]) == 0 {
+					diffRowsStats[metrics.TableSize] = make(map[string]time.Duration)
 				}
-				diffRowsStats[metrics.dbSize][fmt.Sprintf("%d row(s)", w.modifiedRows)] = w.time[RPlusRMinus.String()]
+				diffRowsStats[metrics.TableSize][fmt.Sprintf("%d row(s)", w.ModifiedRows)] = w.Time[RPlusRMinus.String()]
 			}
 		}
 	}

@@ -143,3 +143,10 @@ func (d *dolt) connect() error {
 	d.client = db
 	return nil
 }
+
+func (d *dolt) getDatabaseSize() (float64, error) {
+	s := float64(0)
+	err := d.client.QueryRow(`SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 1) "dbSize"
+	FROM information_schema.tables WHERE table_schema="public";`).Scan(&s)
+	return s, err
+}

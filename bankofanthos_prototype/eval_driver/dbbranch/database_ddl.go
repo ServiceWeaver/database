@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
@@ -34,6 +35,8 @@ type cloneDdl struct {
 	database     *database
 	namespace    string
 	counter      *counter // tables in same database share the same counter table
+
+	mu sync.Mutex
 }
 
 func newCloneDdl(ctx context.Context, Database *database, namespace string) (*cloneDdl, error) {
@@ -62,12 +65,35 @@ func (c *cloneDdl) createClonedTables(ctx context.Context) error {
 		return err
 	}
 
-	for tablename, table := range c.database.Tables {
-		clonedTable, err := c.createClonedTable(ctx, table)
-		if err != nil {
-			return err
+	clonedTableChan := make(chan struct {
+		tablename string
+		cloned    *clonedTable
+		err       error
+	})
+
+	var wg sync.WaitGroup
+
+	for tablename, t := range c.database.Tables {
+		wg.Add(1)
+		go func(tablename string, t *table) {
+			defer wg.Done()
+			cloned, err := c.createClonedTable(ctx, t)
+			clonedTableChan <- struct {
+				tablename string
+				cloned    *clonedTable
+				err       error
+			}{tablename, cloned, err}
+		}(tablename, t)
+	}
+	go func() {
+		wg.Wait()
+		close(clonedTableChan)
+	}()
+	for result := range clonedTableChan {
+		if result.err != nil {
+			return fmt.Errorf("table %s: %s", result.tablename, result.err)
 		}
-		c.clonedTables[tablename] = clonedTable
+		c.clonedTables[result.tablename] = result.cloned
 	}
 
 	return nil
@@ -105,11 +131,22 @@ func (c *cloneDdl) close(ctx context.Context) error {
 }
 
 func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clonedTable, error) {
-
+	c.mu.Lock()
 	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot, c.counter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create +/- tables or view: %w", err)
 	}
+	clonedTable := &clonedTable{
+		Snapshot: snapshot,
+		Plus:     plus,
+		Minus:    minus,
+		View:     view,
+		Counter:  c.counter,
+	}
+
+	originalName := snapshot.Name
+	c.clonedTables[originalName] = clonedTable
+	c.mu.Unlock()
 
 	// For now, do not apply index
 	// err = c.applyIndexes(ctx, snapshot, plus, minus)
@@ -123,7 +160,6 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 	}
 
 	// at the end, rename original snapshot to tablesnapshot and view as the original snapshot name
-	originalName := snapshot.Name
 	err = alterTableName(ctx, c.database.connPool, snapshot.Name+snapshotSuffix, snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to alter table names: %w", err)
@@ -134,15 +170,6 @@ func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clo
 		return nil, fmt.Errorf("failed to alter view names: %w", err)
 	}
 
-	clonedTable := &clonedTable{
-		Snapshot: snapshot,
-		Plus:     plus,
-		Minus:    minus,
-		View:     view,
-		Counter:  c.counter,
-	}
-
-	c.clonedTables[originalName] = clonedTable
 	return clonedTable, nil
 }
 
@@ -268,9 +295,9 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 `, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), minus.Name, strings.Join(dCols, ","), strings.Join(dCols, ","), strings.Join(cCols, ","), strings.Join(cCols, ","))
 
 	} else {
-		unionCols := make([]string, len(pk_cols))
-		minusCols := make([]string, len(pk_cols))
-		for i, col := range pk_cols {
+		unionCols := make([]string, len(colnames))
+		minusCols := make([]string, len(colnames))
+		for i, col := range colnames {
 			unionCols[i] = "tmp." + col
 			minusCols[i] = minus.Name + "." + col
 		}
@@ -284,8 +311,8 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 		WHERE NOT EXISTS(
 		SELECT 1 FROM %s
 		WHERE (%s) = (%s)
-		) ORDER BY %s;
-		`, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, minus.Name, strings.Join(unionCols, ","), strings.Join(minusCols, ","), strings.Join(colnames, ", "))
+		) ;
+		`, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, minus.Name, strings.Join(unionCols, ","), strings.Join(minusCols, ","))
 	}
 
 	_, err = c.database.connPool.Exec(ctx, viewQuery)

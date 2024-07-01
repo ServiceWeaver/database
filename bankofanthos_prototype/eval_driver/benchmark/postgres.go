@@ -39,3 +39,12 @@ func (p *postgres) postgresDiff(table string) error {
 
 	return err
 }
+
+func (p *postgres) getDbSize(dbName string) (float64, error) {
+	var size string
+	if err := p.client.QueryRow(fmt.Sprintf("SELECT pg_size_pretty(pg_database_size('%s'));", dbName)).Scan(&size); err != nil {
+		return 0, err
+	}
+
+	return convertSizeToMb(size)
+}
