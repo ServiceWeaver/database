@@ -6,10 +6,10 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 )
 
 // Examples:
@@ -91,33 +91,18 @@ func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error
 		return nil, fmt.Errorf("failed to create new clone ddl: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	triggerChan := make(chan struct {
-		err   error
-		table *clonedTable
-	})
+	g, ctx := errgroup.WithContext(ctx)
 
 	for _, t := range cloneDdl.clonedTables {
-		wg.Add(1)
-		go func(t *clonedTable) {
-			defer wg.Done()
+		t := t
+		g.Go(func() error {
 			err := createTriggers(ctx, b.db, t)
-			triggerChan <- struct {
-				err   error
-				table *clonedTable
-			}{err, t}
-		}(t)
+			return err
+		})
 	}
 
-	go func() {
-		wg.Wait()
-		close(triggerChan)
-	}()
-
-	for result := range triggerChan {
-		if result.err != nil {
-			return nil, fmt.Errorf("table %s: %s", result.table.View.Name, result.err)
-		}
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	branch := &Branch{clonedDdl: cloneDdl, namespace: namespace, committed: false}
@@ -164,39 +149,26 @@ func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n i
 
 	diffs := map[string]*Diff{}
 
-	diffChan := make(chan struct {
-		tableName string
-		diff      *Diff
-		err       error
-	})
-
-	var wg sync.WaitGroup
+	g := NewGroup[string, *Diff](context.Background())
 
 	for tableName, clonedTableA := range A.clonedDdl.clonedTables {
-		wg.Add(1)
-		go func(tableName string, clonedTableA *clonedTable) {
-			defer wg.Done()
+		tableName := tableName
+		clonedTableA := clonedTableA
+		g.Go(func() (string, *Diff, error) {
 			clonedTableB := B.clonedDdl.clonedTables[tableName]
 			dbDiff := newDbDiff(b.db, clonedTableA.Counter.Colname)
 			diff, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, clonedTableA, clonedTableB, n)
-			diffChan <- struct {
-				tableName string
-				diff      *Diff
-				err       error
-			}{tableName, diff, err}
-		}(tableName, clonedTableA)
+			return tableName, diff, err
+		})
 	}
 
-	go func() {
-		wg.Wait()
-		close(diffChan)
-	}()
+	res, err := g.Wait()
+	if err != nil {
+		return nil, err
+	}
 
-	for result := range diffChan {
-		if result.err != nil {
-			return nil, fmt.Errorf("table %s: %s", result.tableName, result.err)
-		}
-		diffs[result.tableName] = result.diff
+	for k, v := range res {
+		diffs[k] = v
 	}
 
 	return diffs, nil

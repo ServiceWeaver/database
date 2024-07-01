@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 )
@@ -111,36 +110,22 @@ func (d *database) getDatabaseMetadata(ctx context.Context) error {
 		return fmt.Errorf("failed to list tables: %w", err)
 	}
 
-	tableChan := make(chan struct {
-		name string
-		t    *table
-		err  error
-	})
-
-	var wg sync.WaitGroup
+	g := NewGroup[string, *table](context.Background())
 	for _, tablename := range tables {
-		wg.Add(1)
-		go func(tablename string) {
-			defer wg.Done()
+		tablename := tablename
+		g.Go(func() (string, *table, error) {
 			t, err := d.getTable(ctx, tablename)
-			tableChan <- struct {
-				name string
-				t    *table
-				err  error
-			}{tablename, t, err}
-		}(tablename)
+			return tablename, t, err
+		})
 	}
 
-	go func() {
-		wg.Wait()
-		close(tableChan)
-	}()
+	res, err := g.Wait()
+	if err != nil {
+		return err
+	}
 
-	for result := range tableChan {
-		if result.err != nil {
-			return fmt.Errorf("failed to get table %s: %s", result.name, result.err)
-		}
-		d.Tables[result.name] = result.t
+	for k, v := range res {
+		d.Tables[k] = v
 	}
 
 	constraints, err := d.getForeignKeyConstraints(ctx)
