@@ -72,24 +72,36 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 	if err != nil {
 		return fmt.Errorf("branch %s failed: %v", branchName, err)
 	}
+	defer main.Delete(ctx)
 	if err := main.Commit(ctx); err != nil {
 		return err
 	}
-
-	start := time.Now()
-	b, err := brancher.Branch(ctx, branchName)
-	if err != nil {
-		return fmt.Errorf("branch %s failed: %v", branchName, err)
-	}
-	duration := time.Since(start)
-	m.branch.time[RPlusRMinus.String()] = duration
 
 	pg, err := newPostgresClient(benchmarkDb.Url)
 	if err != nil {
 		return fmt.Errorf("failed to create new postgres client, %s", err)
 	}
+	defer pg.close()
 
-	operations := [][]*operation{m.writes, m.deletes, m.reads}
+	start := time.Now()
+	startSize, err := pg.getDbSize(benchmarkDb.Name)
+	if err != nil {
+		return err
+	}
+
+	b, err := brancher.Branch(ctx, branchName)
+	if err != nil {
+		return fmt.Errorf("branch %s failed: %v", branchName, err)
+	}
+	duration := time.Since(start)
+	m.Branch.Time[RPlusRMinus.String()] = duration
+	endSize, err := pg.getDbSize(benchmarkDb.Name)
+	if err != nil {
+		return err
+	}
+	m.DbSizeIncrease[RPlusRMinus.String()] = fmt.Sprintf("%.8f MB", endSize-startSize)
+
+	operations := [][]*operation{m.Writes, m.Deletes, m.Reads}
 
 	for _, op := range operations {
 		for _, w := range op {
@@ -100,7 +112,7 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 				}
 			}
 			duration = time.Since(start)
-			w.time[RPlusRMinus.String()] = duration
+			w.Time[RPlusRMinus.String()] = duration
 		}
 
 	}
@@ -111,27 +123,20 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 		}
 	}
 
-	for _, d := range m.diffs {
+	for _, d := range m.Diffs {
 		start = time.Now()
 		_, err = brancher.ComputeDiffAtN(ctx, main, b, 1)
 		if err != nil {
 			log.Panicf("failed to compute diff: %v", err)
 		}
 		duration = time.Since(start)
-		d.time[RPlusRMinus.String()] = duration
+		d.Time[RPlusRMinus.String()] = duration
 	}
 
 	if !debug {
 		if err := b.Delete(ctx); err != nil {
 			return err
 		}
-	}
-	if err := main.Delete(ctx); err != nil {
-		return err
-	}
-
-	if err := pg.close(); err != nil {
-		return err
 	}
 
 	return nil
@@ -149,18 +154,27 @@ func (m *metrics) baselineCloning(benchmarkDb *utility.Database, table string) e
 		return err
 	}
 	duration := time.Since(start)
-	m.branch.time[Postgres.String()] = duration
+	m.Branch.Time[Postgres.String()] = duration
+	defer utility.CloseSnapshotDB(benchmarkDb, snapshot.Name)
 
 	pg, err := newPostgresClient(snapshot.Url)
 	if err != nil {
 		return fmt.Errorf("failed to create new postgres client, %s", err)
 	}
+	defer pg.close()
+
+	s, err := pg.getDbSize(snapshot.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get %s size, err=%s", snapshot.Name, err)
+	}
+
+	m.DbSizeIncrease[Postgres.String()] = fmt.Sprintf("%.8f MB", s)
 
 	if err := pg.copyTable(table); err != nil {
 		return err
 	}
 
-	operations := [][]*operation{m.writes, m.deletes, m.reads}
+	operations := [][]*operation{m.Writes, m.Deletes, m.Reads}
 	for _, op := range operations {
 		start = time.Now()
 		for _, w := range op {
@@ -170,24 +184,17 @@ func (m *metrics) baselineCloning(benchmarkDb *utility.Database, table string) e
 				}
 			}
 			duration = time.Since(start)
-			w.time[Postgres.String()] = duration
+			w.Time[Postgres.String()] = duration
 		}
 	}
 
-	for _, d := range m.diffs {
+	for _, d := range m.Diffs {
 		start = time.Now()
 		if err := pg.postgresDiff(table); err != nil {
 			return fmt.Errorf("failed to diff two tables. %s", err)
 		}
 		duration = time.Since(start)
-		d.time[Postgres.String()] = duration
-	}
-
-	if err := pg.close(); err != nil {
-		return fmt.Errorf("failed to close postgres client, %s", err)
-	}
-	if err := utility.CloseSnapshotDB(benchmarkDb, snapshot.Name); err != nil {
-		return fmt.Errorf("failed to close snapshot db, %s", err)
+		d.Time[Postgres.String()] = duration
 	}
 
 	return nil
@@ -210,7 +217,7 @@ func (m *metrics) doltCloning(port string, table string) error {
 	time.Sleep(30 * time.Millisecond)
 
 	if err := d.loadData(); err != nil {
-		return err
+		return fmt.Errorf("load data failed, err=%s", err)
 	}
 
 	if err := d.connect(); err != nil {
@@ -221,12 +228,22 @@ func (m *metrics) doltCloning(port string, table string) error {
 		return err
 	}
 
+	startSize, err := d.getDatabaseSize()
+	if err != nil {
+		return err
+	}
 	start := time.Now()
 	d.createNewBranch("n")
 	duration := time.Since(start)
-	m.branch.time[Dolt.String()] = duration
+	m.Branch.Time[Dolt.String()] = duration
 
-	operations := [][]*operation{m.writes, m.deletes, m.reads}
+	endSize, err := d.getDatabaseSize()
+	if err != nil {
+		return err
+	}
+	m.DbSizeIncrease[Dolt.String()] = fmt.Sprintf("%.8f MB", endSize-startSize)
+
+	operations := [][]*operation{m.Writes, m.Deletes, m.Reads}
 	for _, op := range operations {
 		for _, w := range op {
 			start = time.Now()
@@ -236,7 +253,7 @@ func (m *metrics) doltCloning(port string, table string) error {
 				}
 			}
 			duration = time.Since(start)
-			w.time[Dolt.String()] = duration
+			w.Time[Dolt.String()] = duration
 		}
 	}
 
@@ -244,13 +261,13 @@ func (m *metrics) doltCloning(port string, table string) error {
 		return err
 	}
 
-	for _, diff := range m.diffs {
+	for _, diff := range m.Diffs {
 		start = time.Now()
 		if err := d.diffBranch(); err != nil {
 			return err
 		}
 		duration = time.Since(start)
-		diff.time[Dolt.String()] = duration
+		diff.Time[Dolt.String()] = duration
 	}
 
 	return nil

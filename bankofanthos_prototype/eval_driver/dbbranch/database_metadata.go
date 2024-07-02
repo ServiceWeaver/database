@@ -109,12 +109,23 @@ func (d *database) getDatabaseMetadata(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to list tables: %w", err)
 	}
+
+	g := NewGroup[string, *table](context.Background())
 	for _, tablename := range tables {
-		table, err := d.getTable(ctx, tablename)
-		if err != nil {
-			return fmt.Errorf("failed to get table %s: %w", tablename, err)
-		}
-		d.Tables[tablename] = table
+		tablename := tablename
+		g.Go(func() (string, *table, error) {
+			t, err := d.getTable(ctx, tablename)
+			return tablename, t, err
+		})
+	}
+
+	res, err := g.Wait()
+	if err != nil {
+		return err
+	}
+
+	for k, v := range res {
+		d.Tables[k] = v
 	}
 
 	constraints, err := d.getForeignKeyConstraints(ctx)

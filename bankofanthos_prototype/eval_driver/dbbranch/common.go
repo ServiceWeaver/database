@@ -3,8 +3,10 @@ package dbbranch
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"golang.org/x/sync/errgroup"
 )
 
 const snapshotSuffix = "snapshot"
@@ -88,4 +90,33 @@ func getAllSchemaNames(ctx context.Context, connPool *pgxpool.Pool) ([]string, e
 		schemaNames = append(schemaNames, schemaName)
 	}
 	return schemaNames, nil
+}
+
+// for goroutine group
+func NewGroup[K comparable, V any](ctx context.Context) *Group[K, V] {
+	g, _ := errgroup.WithContext(ctx)
+	return &Group[K, V]{
+		group:   g,
+		results: make(map[K]V),
+	}
+}
+
+type Group[K comparable, V any] struct {
+	group   *errgroup.Group
+	mu      sync.Mutex
+	results map[K]V
+}
+
+func (g *Group[K, V]) Go(f func() (K, V, error)) {
+	g.group.Go(func() error {
+		key, val, err := f()
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		g.results[key] = val
+		return err
+	})
+}
+
+func (g *Group[K, V]) Wait() (map[K]V, error) {
+	return g.results, g.group.Wait()
 }

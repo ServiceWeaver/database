@@ -58,6 +58,9 @@ func createReadQueries(table string) []string {
 	FROM %s
 	`, table)
 
-	queries := []string{query1, query2, query3, query4}
+	queries := []string{}
+	for i := 0; i < 250; i++ {
+		queries = append(queries, query1, query2, query3, query4)
+	}
 	return queries
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
@@ -34,6 +35,8 @@ type cloneDdl struct {
 	database     *database
 	namespace    string
 	counter      *counter // tables in same database share the same counter table
+
+	mu sync.Mutex
 }
 
 func newCloneDdl(ctx context.Context, Database *database, namespace string) (*cloneDdl, error) {
@@ -62,12 +65,24 @@ func (c *cloneDdl) createClonedTables(ctx context.Context) error {
 		return err
 	}
 
-	for tablename, table := range c.database.Tables {
-		clonedTable, err := c.createClonedTable(ctx, table)
-		if err != nil {
-			return err
-		}
-		c.clonedTables[tablename] = clonedTable
+	g := NewGroup[string, *clonedTable](context.Background())
+
+	for tablename, t := range c.database.Tables {
+		tablename := tablename
+		t := t
+		g.Go(func() (string, *clonedTable, error) {
+			clonedTableB, err := c.createClonedTable(ctx, t)
+			return tablename, clonedTableB, err
+		})
+	}
+
+	res, err := g.Wait()
+	if err != nil {
+		return err
+	}
+
+	for k, v := range res {
+		c.clonedTables[k] = v
 	}
 
 	return nil
@@ -105,44 +120,28 @@ func (c *cloneDdl) close(ctx context.Context) error {
 }
 
 func (c *cloneDdl) createClonedTable(ctx context.Context, snapshot *table) (*clonedTable, error) {
-
-	plus, minus, view, err := c.createPlusMinusTableAndView(ctx, snapshot, c.counter)
+	clonedTable, err := c.createPlusMinusTableAndView(ctx, snapshot, c.counter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create +/- tables or view: %w", err)
 	}
 
-	// For now, do not apply index
-	// err = c.applyIndexes(ctx, snapshot, plus, minus)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to apply index, %s", err)
-	// }
-
-	err = c.applyRules(ctx, snapshot, view)
+	originalName := clonedTable.Snapshot.Name
+	err = c.applyRules(ctx, snapshot, clonedTable.View)
 	if err != nil {
 		return nil, fmt.Errorf("failed to apply rules: %w", err)
 	}
 
 	// at the end, rename original snapshot to tablesnapshot and view as the original snapshot name
-	originalName := snapshot.Name
 	err = alterTableName(ctx, c.database.connPool, snapshot.Name+snapshotSuffix, snapshot)
 	if err != nil {
 		return nil, fmt.Errorf("failed to alter table names: %w", err)
 	}
 
-	err = alterViewName(ctx, c.database.connPool, originalName, view)
+	err = alterViewName(ctx, c.database.connPool, originalName, clonedTable.View)
 	if err != nil {
 		return nil, fmt.Errorf("failed to alter view names: %w", err)
 	}
 
-	clonedTable := &clonedTable{
-		Snapshot: snapshot,
-		Plus:     plus,
-		Minus:    minus,
-		View:     view,
-		Counter:  c.counter,
-	}
-
-	c.clonedTables[originalName] = clonedTable
 	return clonedTable, nil
 }
 
@@ -175,7 +174,9 @@ func (c *cloneDdl) getPrimaryKeyCols(table *table) []string {
 }
 
 // TODO: Pick name for views and plus, minus which does not exist in database
-func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table, counter *counter) (*table, *table, *view, error) {
+func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *table, counter *counter) (*clonedTable, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	plus := &table{
 		Name: fmt.Sprintf("%s.%splus", c.namespace, prodTable.Name),
 		Cols: map[string]column{},
@@ -211,13 +212,13 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 	plusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", plus.Name, columns)
 	_, err := c.database.connPool.Exec(ctx, plusQuery)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create R+, %w", err)
+		return nil, fmt.Errorf("failed to create R+, %w", err)
 	}
 	// create R-
 	minusQuery := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s(\n %s \n);", minus.Name, columns)
 	_, err = c.database.connPool.Exec(ctx, minusQuery)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create R-, %w", err)
+		return nil, fmt.Errorf("failed to create R-, %w", err)
 	}
 
 	view := &view{
@@ -268,9 +269,9 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 `, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), strings.Join(colnames, ", "), minus.Name, strings.Join(dCols, ","), strings.Join(dCols, ","), strings.Join(cCols, ","), strings.Join(cCols, ","))
 
 	} else {
-		unionCols := make([]string, len(pk_cols))
-		minusCols := make([]string, len(pk_cols))
-		for i, col := range pk_cols {
+		unionCols := make([]string, len(colnames))
+		minusCols := make([]string, len(colnames))
+		for i, col := range colnames {
 			unionCols[i] = "tmp." + col
 			minusCols[i] = minus.Name + "." + col
 		}
@@ -284,16 +285,25 @@ func (c *cloneDdl) createPlusMinusTableAndView(ctx context.Context, prodTable *t
 		WHERE NOT EXISTS(
 		SELECT 1 FROM %s
 		WHERE (%s) = (%s)
-		) ORDER BY %s;
-		`, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, minus.Name, strings.Join(unionCols, ","), strings.Join(minusCols, ","), strings.Join(colnames, ", "))
+		) ;
+		`, view.Name, strings.Join(colnames, ", "), strings.Join(colnames, ", "), prodTable.Name, strings.Join(colnames, ", "), plus.Name, minus.Name, strings.Join(unionCols, ","), strings.Join(minusCols, ","))
 	}
 
 	_, err = c.database.connPool.Exec(ctx, viewQuery)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to create R view, %w", err)
+		return nil, fmt.Errorf("failed to create R view, %w", err)
 	}
 
-	return plus, minus, view, nil
+	clonedTable := &clonedTable{
+		Snapshot: prodTable,
+		Plus:     plus,
+		Minus:    minus,
+		View:     view,
+		Counter:  c.counter,
+	}
+	c.clonedTables[prodTable.Name] = clonedTable
+
+	return clonedTable, nil
 }
 
 func (c *cloneDdl) applyIndexes(ctx context.Context, prodTable *table, plus *table, minus *table) error {

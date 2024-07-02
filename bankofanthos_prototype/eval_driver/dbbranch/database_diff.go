@@ -179,7 +179,7 @@ func (d *dbDiff) getPrimarKeyRows(ctx context.Context, aPlus *view, bPlus *view,
 	}
 	sort.Strings(colNames)
 
-	viewName := "AUnionB"
+	viewName := clonedTableA.Snapshot.Name + "AUnionB"
 
 	primaryCols := d.getPrimaryKeyCols(clonedTableA.Snapshot)
 
@@ -287,8 +287,9 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	}
 	views = append(views, bPlus, bMinus)
 
+	prefix := clonedTableA.Snapshot.Name
 	// A+ - B+
-	aPlusOnly, err := d.minusViews(ctx, aPlus, bPlus, "aPlusOnly")
+	aPlusOnly, err := d.minusViews(ctx, aPlus, bPlus, prefix+"aPlusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +307,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	rowDiffs[APlusOnly] = aPlusDiff
 
 	// A+ intersect B+
-	aPlusBPlus, err := d.intersectViews(ctx, aPlus, bPlus, "aPlusBPlus")
+	aPlusBPlus, err := d.intersectViews(ctx, aPlus, bPlus, prefix+"aPlusBPlus")
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +323,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	rowDiffs[APlusBPlus] = aPlusBPlusRowsRowDiff
 
 	// B+ - A+
-	bPlusOnly, err := d.minusViews(ctx, bPlus, aPlus, "bPlusOnly")
+	bPlusOnly, err := d.minusViews(ctx, bPlus, aPlus, prefix+"bPlusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +339,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	rowDiffs[BPlusOnly] = bPlusDiff
 
 	// B- - A-
-	bMinusOnly, err := d.minusViews(ctx, bMinus, aMinus, "bMinusOnly")
+	bMinusOnly, err := d.minusViews(ctx, bMinus, aMinus, prefix+"bMinusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +354,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	rowDiffs[BMinusOnly] = bMinusDiff
 
 	// B- intersect A-
-	aMinusBMinus, err := d.intersectViews(ctx, aMinus, bMinus, "aMinusBMinus")
+	aMinusBMinus, err := d.intersectViews(ctx, aMinus, bMinus, prefix+"aMinusBMinus")
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +368,7 @@ func (d *dbDiff) getNonPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clon
 	rowDiffs[AMinusBMinus] = aMinusbMinusDiff
 
 	// A- - B-
-	aMinusOnly, err := d.minusViews(ctx, aMinus, bMinus, "aMinusOnly")
+	aMinusOnly, err := d.minusViews(ctx, aMinus, bMinus, prefix+"aMinusOnly")
 	if err != nil {
 		return nil, err
 	}
@@ -431,29 +432,31 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, primaryKeyView)
 
-	bMinusAMinus, err := d.minusViews(ctx, bMinus, aMinus, "BMinusAMinus")
+	prefix := clonedTableA.Snapshot.Name
+
+	bMinusAMinus, err := d.minusViews(ctx, bMinus, aMinus, prefix+"BMinusAMinus")
 	if err != nil {
 		return nil, err
 	}
 
-	aMinusBMinus, err := d.minusViews(ctx, aMinus, bMinus, "AMinusBMinus")
+	aMinusBMinus, err := d.minusViews(ctx, aMinus, bMinus, prefix+"AMinusBMinus")
 	if err != nil {
 		return nil, err
 	}
 
-	aMinusIntersectBMinus, err := d.intersectViews(ctx, aMinus, bMinus, "AMinusIntersectBMinus")
+	aMinusIntersectBMinus, err := d.intersectViews(ctx, aMinus, bMinus, prefix+"AMinusIntersectBMinus")
 	if err != nil {
 		return nil, err
 	}
 	views = append(views, bMinusAMinus, aMinusBMinus, aMinusIntersectBMinus)
 
 	// Control: A+, B- - A-
-	leftSideView, err := d.unionViews(ctx, aPlus, bMinusAMinus, "leftView")
+	leftSideView, err := d.unionViews(ctx, aPlus, bMinusAMinus, prefix+"leftView")
 	if err != nil {
 		return nil, err
 	}
 
-	leftSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, leftSideView, "leftDiff")
+	leftSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, leftSideView, prefix+"leftDiff")
 	if err != nil {
 		return nil, err
 	}
@@ -464,11 +467,11 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	views = append(views, leftSideView, leftSideDiff)
 
 	// Experimental: B+, A- - B-
-	rightSideView, err := d.unionViews(ctx, bPlus, aMinusBMinus, "rightView")
+	rightSideView, err := d.unionViews(ctx, bPlus, aMinusBMinus, prefix+"rightView")
 	if err != nil {
 		return nil, err
 	}
-	rightSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, rightSideView, "rightDiff")
+	rightSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, rightSideView, prefix+"rightDiff")
 	if err != nil {
 		return nil, err
 	}
@@ -478,11 +481,11 @@ func (d *dbDiff) getPrimaryKeyRowDiff(ctx context.Context, clonedTableA *clonedT
 	}
 	views = append(views, rightSideView, rightSideDiff)
 
-	middleSideView, err := d.unionUniqueViews(ctx, aMinus, bMinus, "middleView")
+	middleSideView, err := d.unionUniqueViews(ctx, aMinus, bMinus, prefix+"middleView")
 	if err != nil {
 		return nil, err
 	}
-	middleSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, middleSideView, "middleDiff")
+	middleSideDiff, err := d.getRowsByPrimaryKey(ctx, primaryKeyView, middleSideView, prefix+"middleDiff")
 	if err != nil {
 		return nil, err
 	}

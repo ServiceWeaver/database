@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -36,6 +38,18 @@ func main() {
 			log.Panicf("benchmark branching failed, err=%s", err)
 		}
 		metricsStats[dbName] = metrics
+	}
+
+	// write metrics stats to json file
+	jsonData, err := json.MarshalIndent(metricsStats, "", "    ")
+	if err != nil {
+		log.Panicf("Error marshalling json, err=%s", err)
+	}
+
+	// Write JSON data to a file
+	err = os.WriteFile(filepath.Join(dumpDir, "metrics.json"), jsonData, 0644)
+	if err != nil {
+		log.Panicf("Error writing json file, err=%s", err)
 	}
 
 	if err := plotMetrics(metricsStats); err != nil {

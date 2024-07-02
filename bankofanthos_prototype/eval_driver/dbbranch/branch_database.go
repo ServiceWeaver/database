@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 )
 
 // Examples:
@@ -90,11 +91,18 @@ func (b *Brancher) Branch(ctx context.Context, namespace string) (*Branch, error
 		return nil, fmt.Errorf("failed to create new clone ddl: %w", err)
 	}
 
-	for _, clonedTable := range cloneDdl.clonedTables {
-		err = createTriggers(ctx, b.db, clonedTable)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create triggers: %w", err)
-		}
+	g, ctx := errgroup.WithContext(ctx)
+
+	for _, t := range cloneDdl.clonedTables {
+		t := t
+		g.Go(func() error {
+			err := createTriggers(ctx, b.db, t)
+			return err
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	branch := &Branch{clonedDdl: cloneDdl, namespace: namespace, committed: false}
@@ -140,15 +148,27 @@ func (b *Brancher) ComputeDiffAtN(ctx context.Context, A *Branch, B *Branch, n i
 	}
 
 	diffs := map[string]*Diff{}
-	for tableName, clonedTableA := range A.clonedDdl.clonedTables {
-		clonedTableB := B.clonedDdl.clonedTables[tableName]
-		dbDiff := newDbDiff(b.db, clonedTableA.Counter.Colname)
 
-		diff, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, clonedTableA, clonedTableB, n)
-		if err != nil {
-			return nil, err
-		}
-		diffs[tableName] = diff
+	g := NewGroup[string, *Diff](context.Background())
+
+	for tableName, clonedTableA := range A.clonedDdl.clonedTables {
+		tableName := tableName
+		clonedTableA := clonedTableA
+		g.Go(func() (string, *Diff, error) {
+			clonedTableB := B.clonedDdl.clonedTables[tableName]
+			dbDiff := newDbDiff(b.db, clonedTableA.Counter.Colname)
+			diff, err := dbDiff.getClonedTableRowDiffAtNReqs(ctx, clonedTableA, clonedTableB, n)
+			return tableName, diff, err
+		})
+	}
+
+	res, err := g.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range res {
+		diffs[k] = v
 	}
 
 	return diffs, nil
