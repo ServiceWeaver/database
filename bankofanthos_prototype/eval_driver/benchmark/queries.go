@@ -19,7 +19,7 @@ func createInsertQueries(queryCnt int, table string) []string {
 
 	queries := make([]string, queryCnt)
 	for i := 0; i < queryCnt; i++ {
-		queries[i] = fmt.Sprintf("INSERT INTO %s(username,password) VALUES ('%s','%s');", table, randStrL(9, 19, charset), randStrL(4, 10, passwordChar))
+		queries[i] = fmt.Sprintf("INSERT INTO %s(username,password) VALUES ('%s','%s');", table, randStrL(18, 19, charset), randStrL(4, 10, passwordChar))
 	}
 	return queries
 }
@@ -37,30 +37,22 @@ func createDeleteQueries(table string) []string {
 func createReadQueries(table string) []string {
 	// hard coded some queries
 	query1 := fmt.Sprintf(`
-	SELECT *
-	FROM %s
-	WHERE username = 'aaaa';
-	`, table)
+SELECT * FROM %s WHERE username = 'aaaa';
+`, table)
 
 	query2 := fmt.Sprintf(`
-	SELECT *
-	FROM %s
-	WHERE LENGTH(password) = 8 AND username LIKE 'a%%';
-	`, table)
+SELECT * FROM %s WHERE LENGTH(password) = 8 AND username LIKE 'a%%';
+`, table)
 
 	query3 := fmt.Sprintf(`
-	SELECT COUNT(*)
-	FROM %s
-	`, table)
+SELECT COUNT(*) FROM %s
+`, table)
 
 	query4 := fmt.Sprintf(`
-	SELECT *
-	FROM %s
-	`, table)
+SELECT * FROM %s
+`, table)
 
-	queries := []string{}
-	for i := 0; i < 250; i++ {
-		queries = append(queries, query1, query2, query3, query4)
-	}
+	queries := []string{query1, query2, query3, query4}
+
 	return queries
 }

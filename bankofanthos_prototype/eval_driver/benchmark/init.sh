@@ -6,7 +6,7 @@ count="$1"
 
 echo "count": $count
 
-export POSTGRES_DB=benchmark POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres PORT=5433 MIN_LEN=3 MAX_LEN=10
+export POSTGRES_DB=benchmark_100mb POSTGRES_USER=postgres POSTGRES_PASSWORD=postgres PORT=5433 MIN_LEN=3 MAX_LEN=10
 
 generate_username() {
     length=$(( (RANDOM % ($MAX_LEN - $MIN_LEN + 1)) + $MIN_LEN ))
@@ -36,7 +36,7 @@ EOSQL
 }
 
 main() {
-  psql -U postgres -p 5433 -h localhost benchmark -f init.sql
+  psql -U postgres -p 5433 -h localhost $POSTGRES_DB -f init.sql
 
   insert_rows
 }

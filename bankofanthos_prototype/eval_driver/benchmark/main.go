@@ -51,8 +51,4 @@ func main() {
 	if err != nil {
 		log.Panicf("Error writing json file, err=%s", err)
 	}
-
-	if err := plotMetrics(metricsStats); err != nil {
-		log.Panicf("Failed plot metrics, %s", err)
-	}
 }
