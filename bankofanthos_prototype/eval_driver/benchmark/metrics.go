@@ -2,13 +2,20 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
 )
 
+type latency struct {
+	times []time.Duration
+	Sum   time.Duration
+	Std   time.Duration // standard deviation
+	Mean  time.Duration
+}
 type operation struct {
-	Time      map[string]time.Duration
+	Time      map[string]*latency //{R+R-/Dolt/Postgres: {t1,t2,....,tn}}
 	queries   []string
 	QuerySize int
 }
@@ -34,7 +41,7 @@ type metrics struct {
 
 	// performance
 	Writes  []*operation
-	Reads   []*operation
+	Reads   []map[string]*operation
 	Deletes []*operation
 	Diffs   []*diff
 }
@@ -42,20 +49,25 @@ type metrics struct {
 func newMetrics(table string, dbUrl string) (*metrics, error) {
 	insertQueries := [][]string{createInsertQueries(1, table), createInsertQueries(100, table), createInsertQueries(1000, table)}
 	writes := []*operation{
-		{queries: insertQueries[0], QuerySize: len(insertQueries[0]), Time: map[string]time.Duration{}},
-		{queries: insertQueries[1], QuerySize: len(insertQueries[1]), Time: map[string]time.Duration{}},
-		{queries: insertQueries[2], QuerySize: len(insertQueries[2]), Time: map[string]time.Duration{}},
+		{queries: insertQueries[0], QuerySize: len(insertQueries[0]), Time: map[string]*latency{}},
+		{queries: insertQueries[1], QuerySize: len(insertQueries[1]), Time: map[string]*latency{}},
+		{queries: insertQueries[2], QuerySize: len(insertQueries[2]), Time: map[string]*latency{}},
 	}
 
 	var deletes []*operation
 	deleteQueries := createDeleteQueries(table)
-	delete := &operation{queries: deleteQueries, QuerySize: len(deleteQueries), Time: map[string]time.Duration{}}
+	delete := &operation{queries: deleteQueries, QuerySize: len(deleteQueries), Time: map[string]*latency{}}
 	deletes = append(deletes, delete)
 
-	var reads []*operation
+	var reads []map[string]*operation
+	readmap := map[string]*operation{}
 	readQueries := createReadQueries(table)
-	read := &operation{queries: readQueries, QuerySize: len(readQueries), Time: map[string]time.Duration{}}
-	reads = append(reads, read)
+	for _, q := range readQueries {
+		read := &operation{queries: []string{q}, QuerySize: readCntPerQuery, Time: map[string]*latency{}}
+		readmap[q] = read
+	}
+
+	reads = append(reads, readmap)
 
 	branch := &branch{Time: map[string]time.Duration{}}
 
@@ -138,10 +150,10 @@ func (m *metrics) printMetrics() error {
 	fmt.Println()
 	fmt.Println()
 	for _, w := range m.Writes {
-		fmt.Printf("Write %d rows\n", len(w.queries))
+		fmt.Printf("Write %d rows mean\n", len(w.queries))
 		for _, s := range types {
 			t := w.Time[s]
-			fmt.Printf("%s: %s;\t", s, t)
+			fmt.Printf("%s: %s;\t", s, t.Mean)
 		}
 		fmt.Println()
 	}
@@ -149,24 +161,27 @@ func (m *metrics) printMetrics() error {
 	fmt.Println()
 
 	for _, d := range m.Deletes {
-		fmt.Printf("Delete %d queries\n", len(d.queries))
+		fmt.Printf("Delete %d queries mean\n", len(d.queries))
 		for _, s := range types {
 			t := d.Time[s]
-			fmt.Printf("%s: %s;\t", s, t)
+			fmt.Printf("%s: %s;\t", s, t.Mean)
 		}
 		fmt.Println()
 	}
 
 	fmt.Println()
-	for _, r := range m.Reads {
-		fmt.Printf("Read %d queries\n", len(r.queries))
-		for _, s := range types {
-			t := r.Time[s]
-			fmt.Printf("%s: %s;\t", s, t)
+	for _, reads := range m.Reads {
+		for q, r := range reads {
+			fmt.Printf("Read query %d times mean %s", len(r.Time[types[0]].times), q)
+			for _, s := range types {
+				t := r.Time[s]
+				fmt.Printf("%s: %s;\t", s, t.Mean)
+			}
+			fmt.Println()
+			fmt.Println()
 		}
 	}
 
-	fmt.Println()
 	fmt.Println()
 	for _, d := range m.Diffs {
 		fmt.Printf("Diffing %d modified rows with table rows %d\n", d.ModifiedRows, m.Rows)
@@ -179,4 +194,23 @@ func (m *metrics) printMetrics() error {
 
 	fmt.Println()
 	return nil
+}
+
+func newLatency(durations []time.Duration) *latency {
+	if len(durations) == 0 {
+		return nil
+	}
+	var sum time.Duration
+	for _, t := range durations {
+		sum = sum + t
+	}
+	mean := sum / time.Duration(len(durations))
+
+	var variance float64
+	for _, d := range durations {
+		variance += math.Pow(float64(d-mean), 2)
+	}
+	variance /= float64(len(durations))
+
+	return &latency{times: durations, Sum: sum, Std: time.Duration(math.Sqrt(variance)), Mean: mean}
 }

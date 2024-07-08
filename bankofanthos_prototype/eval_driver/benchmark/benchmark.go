@@ -18,6 +18,7 @@ const (
 	RPlusRMinus diffType = iota + 1
 	Postgres
 	Dolt
+	readCntPerQuery = 250
 )
 
 func (d diffType) String() string {
@@ -101,20 +102,39 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 	}
 	m.DbSizeIncrease[RPlusRMinus.String()] = fmt.Sprintf("%.8f MB", endSize-startSize)
 
-	operations := [][]*operation{m.Writes, m.Deletes, m.Reads}
+	operations := [][]*operation{m.Writes, m.Deletes}
 
 	for _, op := range operations {
 		for _, w := range op {
-			start = time.Now()
-			for _, q := range w.queries {
+			durations := make([]time.Duration, w.QuerySize)
+			for i, q := range w.queries {
+				start = time.Now()
 				if _, err := pg.client.Exec(q); err != nil {
 					return err
 				}
+				durations[i] = time.Since(start)
 			}
-			duration = time.Since(start)
-			w.Time[RPlusRMinus.String()] = duration
+
+			w.Time[RPlusRMinus.String()] = newLatency(durations)
 		}
 
+	}
+
+	// reads
+	for _, rMap := range m.Reads {
+		for _, r := range rMap {
+			durations := make([]time.Duration, readCntPerQuery)
+			for _, q := range r.queries {
+				for i := 0; i < readCntPerQuery; i++ {
+					start = time.Now()
+					if _, err := pg.client.Exec(q); err != nil {
+						return err
+					}
+					durations[i] = time.Since(start)
+				}
+			}
+			r.Time[RPlusRMinus.String()] = newLatency(durations)
+		}
 	}
 
 	if !debug {
@@ -174,17 +194,35 @@ func (m *metrics) baselineCloning(benchmarkDb *utility.Database, table string) e
 		return err
 	}
 
-	operations := [][]*operation{m.Writes, m.Deletes, m.Reads}
+	operations := [][]*operation{m.Writes, m.Deletes}
 	for _, op := range operations {
-		start = time.Now()
 		for _, w := range op {
-			for _, q := range w.queries {
+			durations := make([]time.Duration, w.QuerySize)
+			for i, q := range w.queries {
+				start = time.Now()
 				if _, err := pg.client.Exec(q); err != nil {
 					return err
 				}
+				durations[i] = time.Since(start)
 			}
-			duration = time.Since(start)
-			w.Time[Postgres.String()] = duration
+			w.Time[Postgres.String()] = newLatency(durations)
+		}
+	}
+
+	// reads
+	for _, rMap := range m.Reads {
+		for _, r := range rMap {
+			durations := make([]time.Duration, readCntPerQuery)
+			for _, q := range r.queries {
+				for i := 0; i < readCntPerQuery; i++ {
+					start = time.Now()
+					if _, err := pg.client.Exec(q); err != nil {
+						return err
+					}
+					durations[i] = time.Since(start)
+				}
+			}
+			r.Time[Postgres.String()] = newLatency(durations)
 		}
 	}
 
@@ -243,17 +281,35 @@ func (m *metrics) doltCloning(port string, table string) error {
 	}
 	m.DbSizeIncrease[Dolt.String()] = fmt.Sprintf("%.8f MB", endSize-startSize)
 
-	operations := [][]*operation{m.Writes, m.Deletes, m.Reads}
+	operations := [][]*operation{m.Writes, m.Deletes}
 	for _, op := range operations {
 		for _, w := range op {
-			start = time.Now()
-			for _, q := range w.queries {
+			durations := make([]time.Duration, w.QuerySize)
+			for i, q := range w.queries {
+				start = time.Now()
 				if _, err := d.client.Exec(q); err != nil {
 					return err
 				}
+				durations[i] = time.Since(start)
 			}
-			duration = time.Since(start)
-			w.Time[Dolt.String()] = duration
+			w.Time[Dolt.String()] = newLatency(durations)
+		}
+	}
+
+	// reads
+	for _, rMap := range m.Reads {
+		for _, r := range rMap {
+			durations := make([]time.Duration, readCntPerQuery)
+			for _, q := range r.queries {
+				for i := 0; i < readCntPerQuery; i++ {
+					start = time.Now()
+					if _, err := d.client.Exec(q); err != nil {
+						return err
+					}
+					durations[i] = time.Since(start)
+				}
+			}
+			r.Time[Dolt.String()] = newLatency(durations)
 		}
 	}
 
