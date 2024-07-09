@@ -68,6 +68,14 @@ common currency missing
 go run . -configFile=config_v3.toml
 ```
 
+### BUG4
+- V1 displays all ssn digits
+- V2 only displays last 4 digits
+- We can see the ssn column difference for database diffs.
+```shell
+go run . -configFile=config_v4.toml
+```
+
 ## Developer Guide
 ### Connect to DB for developer
 Login to docker terminal docker terminal
