@@ -69,8 +69,8 @@ go run . -configFile=config_v3.toml
 ```
 
 ### BUG4
-- V1 displays all ssn digits
-- V2 only displays last 4 digits
+- V1 displays all ssn digits, which is 111-11-1111
+- V2 has the wrong ssn format as *****1-1111, whish should be ***-**-1111
 - We can see the ssn column difference for database diffs.
 ```shell
 go run . -configFile=config_v4.toml
