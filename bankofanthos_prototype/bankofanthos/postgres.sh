@@ -28,7 +28,7 @@ main() {
   psql postgresdb_bug admin -c " INSERT INTO CURRENCY(CURRENCY_CODE, VALUE_USD) VALUES('cad',0.73);"
 
   POSTGRES_DB=postgresdb POSTGRES_USER=admin POSTGRES_PASSWORD=admin LOCAL_ROUTING_NUM=883745000 USE_DEMO_DATA=True /app/1_create_transactions.sh
-    POSTGRES_DB=postgresdb_bug POSTGRES_USER=admin POSTGRES_PASSWORD=admin LOCAL_ROUTING_NUM=883745000 USE_DEMO_DATA=True /app/1_create_transactions.sh
+  POSTGRES_DB=postgresdb_bug POSTGRES_USER=admin POSTGRES_PASSWORD=admin LOCAL_ROUTING_NUM=883745000 USE_DEMO_DATA=True /app/1_create_transactions.sh
 }
 
 main "$@"

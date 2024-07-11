@@ -637,7 +637,8 @@ func (s *server) signupPostHandler(w http.ResponseWriter, r *http.Request) {
 
 	ssn := r.FormValue("ssn")
 	if s.config.ssnTruncated {
-		ssn = "***-**-" + ssn[len(ssn)-4:]
+		prefix := "*****"
+		ssn = prefix + ssn[len(ssn)-len(prefix)-1:]
 	}
 
 	creq := userservice.CreateUserRequest{
