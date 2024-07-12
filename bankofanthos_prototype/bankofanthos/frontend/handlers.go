@@ -635,6 +635,12 @@ func (s *server) signupPostHandler(w http.ResponseWriter, r *http.Request) {
 	logger := s.Logger(r.Context())
 	logger.Debug("Creating new user")
 
+	ssn := r.FormValue("ssn")
+	if s.config.ssnTruncated {
+		prefix := "*****"
+		ssn = prefix + ssn[len(ssn)-len(prefix)-1:]
+	}
+
 	creq := userservice.CreateUserRequest{
 		Username:       r.FormValue("username"),
 		Password:       r.FormValue("password"),
@@ -646,7 +652,7 @@ func (s *server) signupPostHandler(w http.ResponseWriter, r *http.Request) {
 		Address:        r.FormValue("address"),
 		State:          r.FormValue("state"),
 		Zip:            r.FormValue("zip"),
-		Ssn:            r.FormValue("ssn"),
+		Ssn:            ssn,
 	}
 	err := s.userService.Get().CreateUser(r.Context(), creq)
 	if err != nil {

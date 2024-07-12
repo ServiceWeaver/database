@@ -55,6 +55,7 @@ type serverConfig struct {
 	podName         string
 	podZone         string
 	AccountIdLength int64
+	ssnTruncated    bool
 }
 
 // config contains configuration options read from a weaver TOML file.
@@ -64,6 +65,7 @@ type config struct {
 	BankName              string `toml:"bank_name"`
 	BackendTimeoutSeconds int    `toml:"backend_timeout_seconds"`
 	AccountIdLength       int64  `toml:"account_id_length"`
+	SsnTruncated          bool   `toml:"ssn_truncated"`
 }
 
 // server is the application frontend.
@@ -128,6 +130,7 @@ func (s *server) Init(ctx context.Context) error {
 	s.config.backendTimeout = time.Duration(s.Config().BackendTimeoutSeconds) * time.Second
 	s.config.bankName = s.Config().BankName
 	s.config.AccountIdLength = s.Config().AccountIdLength
+	s.config.ssnTruncated = s.Config().SsnTruncated
 	return nil
 }
 
