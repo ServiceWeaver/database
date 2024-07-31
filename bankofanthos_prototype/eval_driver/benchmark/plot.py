@@ -3,8 +3,7 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-database = ['benchmark_1mb','benchmark_20mb','benchmark_100mb']
+database = []
 types = ['RPlusRMinus','Postgres', 'Dolt']
 colors = ['blue', 'green', 'red']
 table = 'users'
@@ -137,6 +136,9 @@ def plot(x_values, y_values, yerr_values, colors,line_names,title_name):
 
 def main():
     data = readFromFile("dump/metrics.json")
+    global database
+    database = data.keys()
+    
     plotStats(data)
 
 if __name__ == "__main__":

@@ -36,7 +36,7 @@ func runTrail(ctx context.Context, trail *utility.Trail, branchers map[string]*d
 	var prodServices []*utility.ProdService
 	if trail.IsControl() {
 		prodServices = []*utility.ProdService{v1ProdService}
-	} else if trail.IsConaryOnly() {
+	} else if trail.IsCanaryOnly() {
 		prodServices = []*utility.ProdService{v2ProdService}
 	} else {
 		prodServices = []*utility.ProdService{v1ProdService, v2ProdService}
@@ -90,7 +90,7 @@ func main() {
 	var deleteBranches, inlineDiff, respDiff bool
 	flag.StringVar(&configFile, "configFile", "config.toml", "Config file for eval")
 	flag.BoolVar(&deleteBranches, "deleteBranches", true, "Delete branches at the end of eval run, only set false for investigation purpose")
-	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or not")
+	flag.BoolVar(&inlineDiff, "inlineDiff", false, "Whether to use inline diff or side by side diff")
 	flag.BoolVar(&respDiff, "respDiff", true, "Whether to show response diff or not")
 	flag.Parse()
 
