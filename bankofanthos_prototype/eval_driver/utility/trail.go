@@ -67,6 +67,6 @@ func (t *Trail) IsControl() bool {
 	return t.Name == "Control"
 }
 
-func (t *Trail) IsConaryOnly() bool {
+func (t *Trail) IsCanaryOnly() bool {
 	return t.Name == "E_C"
 }

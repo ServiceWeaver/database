@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,9 +12,26 @@ import (
 
 const dumpDir = "dump"
 
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	return strings.Join(*i, ", ")
+}
+
+func (i *arrayFlags) Set(value string) error {
+	if i == nil {
+		return fmt.Errorf("array flag is null")
+	}
+	*i = append(*i, value)
+	return nil
+}
+
 func main() {
 	var debug bool
+	var dbs arrayFlags
+
 	flag.BoolVar(&debug, "debug", false, "Debug / analyze R+/R- implementation")
+	flag.Var(&dbs, "dbUrlLists", "Database url lists for benchmark to run")
 	flag.Parse()
 
 	if _, err := os.Stat(dumpDir); os.IsNotExist(err) {
@@ -21,8 +39,6 @@ func main() {
 			log.Panicf("Error creating directory, err=%s", err)
 		}
 	}
-
-	dbs := []string{"postgresql://postgres:postgres@localhost:5433/benchmark_1mb", "postgresql://postgres:postgres@localhost:5433/benchmark_20mb", "postgresql://postgres:postgres@localhost:5433/benchmark_100mb"}
 
 	metricsStats := map[string]map[string]*metrics{} // {Database: {table:metrics, table_with_primary_key:metrics}}
 
