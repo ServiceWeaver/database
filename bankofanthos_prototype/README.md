@@ -1,7 +1,7 @@
 # Eval Driver Prototype on Bank Of Anthos
 Eval driver runs diff testing for bank of anthos, it takes two versions of Bank Of Anthos and sampled requests as input, display response diff and database diff as output.
 
-For the same set of requests, we run 4 different tails:
+For the same set of requests, we run 4 different trials:
 1. Send all requests to v1 as Control
 2. Send all requests to v2 as Experimental_1
 3. Send half request to v1, half request to v2 as Experimental_2

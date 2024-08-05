@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,6 +19,9 @@ func (i *arrayFlags) String() string {
 }
 
 func (i *arrayFlags) Set(value string) error {
+	if i == nil {
+		return fmt.Errorf("array flag is null")
+	}
 	*i = append(*i, value)
 	return nil
 }
