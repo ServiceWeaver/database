@@ -49,7 +49,7 @@ func main() {
 		table := "users"
 		table_pk := "users_pk"
 
-		metrics, err := benchmarkBranching([]string{table, table_pk}, dbName, dbUrl, doltPort, debug)
+		metrics, err := benchmarkBranching([]string{table, table_pk}, dbName, dbUrl, doltPort, debug, true)
 		if err != nil {
 			log.Panicf("benchmark branching failed, err=%s", err)
 		}

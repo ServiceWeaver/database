@@ -40,24 +40,20 @@ type metrics struct {
 	Branch *branch
 
 	// performance
-	Writes  []*operation
-	Reads   []map[string]*operation
-	Deletes []*operation
-	Diffs   []*diff
+	Writes []*operation
+	Reads  []map[string]*operation
+	Diffs  []*diff
 }
 
 func newMetrics(table string, dbUrl string) (*metrics, error) {
-	insertQueries := [][]string{createInsertQueries(1, table), createInsertQueries(100, table), createInsertQueries(1000, table)}
+	insertQueries := [][]string{createInsertQueries(1, table), createInsertQueries(100, table), createInsertQueries(1000, table), createInsertQueries(10000, table), createInsertQueries(100000, table)}
 	writes := []*operation{
 		{queries: insertQueries[0], QuerySize: len(insertQueries[0]), Time: map[string]*latency{}},
 		{queries: insertQueries[1], QuerySize: len(insertQueries[1]), Time: map[string]*latency{}},
 		{queries: insertQueries[2], QuerySize: len(insertQueries[2]), Time: map[string]*latency{}},
+		{queries: insertQueries[3], QuerySize: len(insertQueries[3]), Time: map[string]*latency{}},
+		{queries: insertQueries[4], QuerySize: len(insertQueries[4]), Time: map[string]*latency{}},
 	}
-
-	var deletes []*operation
-	deleteQueries := createDeleteQueries(table)
-	delete := &operation{queries: deleteQueries, QuerySize: len(deleteQueries), Time: map[string]*latency{}}
-	deletes = append(deletes, delete)
 
 	var reads []map[string]*operation
 	readmap := map[string]*operation{}
@@ -77,7 +73,7 @@ func newMetrics(table string, dbUrl string) (*metrics, error) {
 		diffs = append(diffs, diff)
 	}
 
-	m := &metrics{DbUrl: dbUrl, Table: table, Writes: writes, Deletes: deletes, Reads: reads, Branch: branch, Diffs: diffs, DbSizeIncrease: map[string]string{}}
+	m := &metrics{DbUrl: dbUrl, Table: table, Writes: writes, Reads: reads, Branch: branch, Diffs: diffs, DbSizeIncrease: map[string]string{}}
 	if err := m.getTableSize(); err != nil {
 		return nil, err
 	}
@@ -134,12 +130,15 @@ func (m *metrics) getTableSize() error {
 	return nil
 }
 
-func (m *metrics) printMetrics() error {
+func (m *metrics) printMetrics(plusMinusOnly bool) error {
 	fmt.Printf("Table %s,", m.Table)
 	fmt.Printf("Table has %d rows,", m.Rows)
 	fmt.Printf("Table size is %s\n", m.TableSize)
 
 	types := []string{Postgres.String(), Dolt.String(), RPlusRMinus.String()}
+	if plusMinusOnly {
+		types = []string{RPlusRMinus.String()}
+	}
 
 	fmt.Println("Branching")
 	for _, s := range types {
@@ -153,17 +152,6 @@ func (m *metrics) printMetrics() error {
 		fmt.Printf("Write %d rows mean\n", len(w.queries))
 		for _, s := range types {
 			t := w.Time[s]
-			fmt.Printf("%s: %s;\t", s, t.Mean)
-		}
-		fmt.Println()
-	}
-
-	fmt.Println()
-
-	for _, d := range m.Deletes {
-		fmt.Printf("Delete %d queries mean\n", len(d.queries))
-		for _, s := range types {
-			t := d.Time[s]
 			fmt.Printf("%s: %s;\t", s, t.Mean)
 		}
 		fmt.Println()

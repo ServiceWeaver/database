@@ -19,7 +19,7 @@ func createInsertQueries(queryCnt int, table string) []string {
 
 	queries := make([]string, queryCnt)
 	for i := 0; i < queryCnt; i++ {
-		queries[i] = fmt.Sprintf("INSERT INTO %s(username,password) VALUES ('%s','%s');", table, randStrL(18, 19, charset), randStrL(4, 10, passwordChar))
+		queries[i] = fmt.Sprintf("INSERT INTO %s(username,password) VALUES ('%s','%s');", table, randStrL(18, 30, charset), randStrL(4, 10, passwordChar))
 	}
 	return queries
 }
@@ -45,14 +45,10 @@ SELECT * FROM %s WHERE LENGTH(password) = 8 AND username LIKE 'a%%';
 `, table)
 
 	query3 := fmt.Sprintf(`
-SELECT COUNT(*) FROM %s
-`, table)
-
-	query4 := fmt.Sprintf(`
 SELECT * FROM %s
 `, table)
 
-	queries := []string{query1, query2, query3, query4}
+	queries := []string{query1, query2, query3}
 
 	return queries
 }

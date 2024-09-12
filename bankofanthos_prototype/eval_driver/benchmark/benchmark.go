@@ -25,7 +25,7 @@ func (d diffType) String() string {
 	return [...]string{"RPlusRMinus", "Postgres", "Dolt"}[d-1]
 }
 
-func benchmarkBranching(tables []string, dbName string, dbUrl string, doltPort string, debug bool) (map[string]*metrics, error) {
+func benchmarkBranching(tables []string, dbName string, dbUrl string, doltPort string, debug bool, plusMinusOnly bool) (map[string]*metrics, error) {
 	ctx := context.Background()
 
 	benchmarkDb := &utility.Database{Name: dbName, Url: dbUrl}
@@ -42,15 +42,17 @@ func benchmarkBranching(tables []string, dbName string, dbUrl string, doltPort s
 			return nil, err
 		}
 
-		if err := m.baselineCloning(benchmarkDb, table); err != nil {
-			return nil, err
+		if !plusMinusOnly {
+			if err := m.baselineCloning(benchmarkDb, table); err != nil {
+				return nil, err
+			}
+
+			if err := m.doltCloning(doltPort, table); err != nil {
+				return nil, err
+			}
 		}
 
-		if err := m.doltCloning(doltPort, table); err != nil {
-			return nil, err
-		}
-
-		m.printMetrics()
+		m.printMetrics(plusMinusOnly)
 		metrics[table] = m
 	}
 
@@ -102,22 +104,26 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 	}
 	m.DbSizeIncrease[RPlusRMinus.String()] = fmt.Sprintf("%.8f MB", endSize-startSize)
 
-	operations := [][]*operation{m.Writes, m.Deletes}
-
-	for _, op := range operations {
-		for _, w := range op {
-			durations := make([]time.Duration, w.QuerySize)
-			for i, q := range w.queries {
-				start = time.Now()
-				if _, err := pg.client.Exec(q); err != nil {
-					return err
-				}
-				durations[i] = time.Since(start)
+	for i, w := range m.Writes {
+		durations := make([]time.Duration, w.QuerySize)
+		for i, q := range w.queries {
+			start = time.Now()
+			if _, err := pg.client.Exec(q); err != nil {
+				// return err
+				continue
 			}
-
-			w.Time[RPlusRMinus.String()] = newLatency(durations)
+			durations[i] = time.Since(start)
 		}
 
+		w.Time[RPlusRMinus.String()] = newLatency(durations)
+		// diff
+		start = time.Now()
+		_, err = brancher.ComputeDiffAtN(ctx, main, b, 1)
+		if err != nil {
+			log.Panicf("failed to compute diff: %v", err)
+		}
+		duration = time.Since(start)
+		m.Diffs[i].Time[RPlusRMinus.String()] = duration
 	}
 
 	// reads
@@ -141,16 +147,6 @@ func (m *metrics) plusMinusCloning(ctx context.Context, benchmarkDb *utility.Dat
 		if err := b.Commit(ctx); err != nil {
 			return err
 		}
-	}
-
-	for _, d := range m.Diffs {
-		start = time.Now()
-		_, err = brancher.ComputeDiffAtN(ctx, main, b, 1)
-		if err != nil {
-			log.Panicf("failed to compute diff: %v", err)
-		}
-		duration = time.Since(start)
-		d.Time[RPlusRMinus.String()] = duration
 	}
 
 	if !debug {
@@ -194,19 +190,25 @@ func (m *metrics) baselineCloning(benchmarkDb *utility.Database, table string) e
 		return err
 	}
 
-	operations := [][]*operation{m.Writes, m.Deletes}
-	for _, op := range operations {
-		for _, w := range op {
-			durations := make([]time.Duration, w.QuerySize)
-			for i, q := range w.queries {
-				start = time.Now()
-				if _, err := pg.client.Exec(q); err != nil {
-					return err
-				}
-				durations[i] = time.Since(start)
+	for i, w := range m.Writes {
+		durations := make([]time.Duration, w.QuerySize)
+		for i, q := range w.queries {
+			start = time.Now()
+			if _, err := pg.client.Exec(q); err != nil {
+				return err
 			}
-			w.Time[Postgres.String()] = newLatency(durations)
+			durations[i] = time.Since(start)
 		}
+		w.Time[Postgres.String()] = newLatency(durations)
+
+		// diff
+		start = time.Now()
+
+		if err := pg.postgresDiff(table); err != nil {
+			return fmt.Errorf("failed to diff two tables. %s", err)
+		}
+		duration = time.Since(start)
+		m.Diffs[i].Time[Postgres.String()] = duration
 	}
 
 	// reads
@@ -224,15 +226,6 @@ func (m *metrics) baselineCloning(benchmarkDb *utility.Database, table string) e
 			}
 			r.Time[Postgres.String()] = newLatency(durations)
 		}
-	}
-
-	for _, d := range m.Diffs {
-		start = time.Now()
-		if err := pg.postgresDiff(table); err != nil {
-			return fmt.Errorf("failed to diff two tables. %s", err)
-		}
-		duration = time.Since(start)
-		d.Time[Postgres.String()] = duration
 	}
 
 	return nil
@@ -281,19 +274,24 @@ func (m *metrics) doltCloning(port string, table string) error {
 	}
 	m.DbSizeIncrease[Dolt.String()] = fmt.Sprintf("%.8f MB", endSize-startSize)
 
-	operations := [][]*operation{m.Writes, m.Deletes}
-	for _, op := range operations {
-		for _, w := range op {
-			durations := make([]time.Duration, w.QuerySize)
-			for i, q := range w.queries {
-				start = time.Now()
-				if _, err := d.client.Exec(q); err != nil {
-					return err
-				}
-				durations[i] = time.Since(start)
+	for i, w := range m.Writes {
+		durations := make([]time.Duration, w.QuerySize)
+		for i, q := range w.queries {
+			start = time.Now()
+			if _, err := d.client.Exec(q); err != nil {
+				return err
 			}
-			w.Time[Dolt.String()] = newLatency(durations)
+			durations[i] = time.Since(start)
 		}
+		w.Time[Dolt.String()] = newLatency(durations)
+
+		// diff
+		start = time.Now()
+		if err := d.diffBranch(); err != nil {
+			return err
+		}
+		duration = time.Since(start)
+		m.Diffs[i].Time[Dolt.String()] = duration
 	}
 
 	// reads
@@ -315,15 +313,6 @@ func (m *metrics) doltCloning(port string, table string) error {
 
 	if err := d.commit(); err != nil {
 		return err
-	}
-
-	for _, diff := range m.Diffs {
-		start = time.Now()
-		if err := d.diffBranch(); err != nil {
-			return err
-		}
-		duration = time.Since(start)
-		diff.Time[Dolt.String()] = duration
 	}
 
 	return nil
