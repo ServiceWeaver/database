@@ -21,6 +21,8 @@ func createTriggers(ctx context.Context, connPool *pgxpool.Pool, clonedTable *cl
 		return fmt.Errorf("failed to create delete triggers: %w", err)
 	}
 
+	fmt.Printf("cloned table is\n %v\n", clonedTable)
+
 	return nil
 }
 
