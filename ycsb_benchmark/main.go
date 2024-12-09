@@ -97,7 +97,7 @@ func main() {
 	bin := "./bin/go-ycsb"
 
 	recordCnts := []int{10000, 10000, 100000, 100000, 10000000}
-	workloads := []string{"workloada", "workloadb", "workloadc", "workloadd", "workloade"}
+	workloads := []string{"workloada", "workloadb", "workloadc", "workloadd", "workloade", "workloadf"}
 	operationcounts := []int{100, 1000, 100, 1000, 1000}
 	branchScript := "usertable.sql"
 	cleanup := "cleanup.sql"
@@ -117,15 +117,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	for j, workload := range workloads {
-		for i, recordCnt := range recordCnts {
+	for i, recordCnt := range recordCnts {
+		for j, workload := range workloads {
 			var m Metrics
 			m.RecordCnt = recordCnt
 			m.Workload = workload
 			m.OperationCnt = operationcounts[i]
 
 			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
-
 			// Run on branched db
 			RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, branchScript)
 			m.Branch = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcounts[i])

@@ -87,7 +87,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
 RAISE NOTICE 'Trigger redirect_update executed for NEW ycsb_key % OLD ycsb_key %', NEW.ycsb_key,OLD.ycsb_key;
-IF EXISTS (SELECT * FROM usertable WHERE ycsb_key = NEW.ycsb_key) THEN
+IF EXISTS (SELECT * FROM usertable WHERE ycsb_key = NEW.ycsb_key)  AND  NEW.ycsb_key !=  OLD.ycsb_key THEN
      RAISE EXCEPTION 'ycsb key already exists %', OLD.ycsb_key;
 END IF;
 INSERT INTO usertableminus (field0, field1, field2, field3, field4, field5, field6, field7, field8, field9, ycsb_key) 
