@@ -1,32 +1,22 @@
 [
-  {
-    "Workload": "workloada",
-    "Plain": "Run finished, takes 1.05041123s\nREAD   - Takes(s): 1.0, Count: 484, OPS: 466.3, Avg(us): 238, Min(us): 122, Max(us): 1973, 50th(us): 228, 90th(us): 300, 95th(us): 336, 99th(us): 422, 99.9th(us): 1973, 99.99th(us): 1973\nTOTAL  - Takes(s): 1.0, Count: 1000, OPS: 961.2, Avg(us): 1034, Min(us): 122, Max(us): 10287, 50th(us): 1278, 90th(us): 1799, 95th(us): 1864, 99th(us): 5691, 99.9th(us): 6519, 99.99th(us): 10287\nUPDATE - Takes(s): 1.0, Count: 516, OPS: 495.9, Avg(us): 1780, Min(us): 1069, Max(us): 10287, 50th(us): 1663, 90th(us): 1861, 95th(us): 1961, 99th(us): 5995, 99.9th(us): 6519, 99.99th(us): 10287\n",
-    "Branch": "Run finished, takes 940.36683ms\nREAD   - Takes(s): 0.9, Count: 488, OPS: 521.5, Avg(us): 251, Min(us): 148, Max(us): 5559, 50th(us): 228, 90th(us): 298, 95th(us): 329, 99th(us): 828, 99.9th(us): 5559, 99.99th(us): 5559\nTOTAL  - Takes(s): 0.9, Count: 488, OPS: 522.2, Avg(us): 251, Min(us): 148, Max(us): 5559, 50th(us): 228, 90th(us): 298, 95th(us): 329, 99th(us): 828, 99.9th(us): 5559, 99.99th(us): 5559\nUPDATE_ERROR - Takes(s): 0.9, Count: 512, OPS: 551.0, Avg(us): 1570, Min(us): 997, Max(us): 5611, 50th(us): 1338, 90th(us): 2201, 95th(us): 2301, 99th(us): 2439, 99.9th(us): 3833, 99.99th(us): 5611\n",
-    "RecordCnt": 1000
-  },
-  {
-    "Workload": "workloadb",
-    "Plain": "Run finished, takes 276.287527ms\nREAD   - Takes(s): 0.3, Count: 946, OPS: 3453.9, Avg(us): 166, Min(us): 117, Max(us): 3157, 50th(us): 149, 90th(us): 210, 95th(us): 233, 99th(us): 378, 99.9th(us): 1133, 99.99th(us): 3157\nTOTAL  - Takes(s): 0.3, Count: 1000, OPS: 3656.8, Avg(us): 268, Min(us): 117, Max(us): 8175, 50th(us): 151, 90th(us): 233, 95th(us): 1502, 99th(us): 1914, 99.9th(us): 6403, 99.99th(us): 8175\nUPDATE - Takes(s): 0.3, Count: 54, OPS: 204.0, Avg(us): 2058, Min(us): 1254, Max(us): 8175, 50th(us): 1687, 90th(us): 2083, 95th(us): 5591, 99th(us): 6403, 99.9th(us): 8175, 99.99th(us): 8175\n",
-    "Branch": "Run finished, takes 306.34916ms\nREAD   - Takes(s): 0.3, Count: 949, OPS: 3151.1, Avg(us): 227, Min(us): 160, Max(us): 5495, 50th(us): 206, 90th(us): 265, 95th(us): 287, 99th(us): 435, 99.9th(us): 1313, 99.99th(us): 5495\nTOTAL  - Takes(s): 0.3, Count: 949, OPS: 3145.3, Avg(us): 227, Min(us): 160, Max(us): 5495, 50th(us): 206, 90th(us): 265, 95th(us): 287, 99th(us): 435, 99.9th(us): 1313, 99.99th(us): 5495\nUPDATE_ERROR - Takes(s): 0.3, Count: 51, OPS: 175.9, Avg(us): 1624, Min(us): 1241, Max(us): 5163, 50th(us): 1362, 90th(us): 2223, 95th(us): 2261, 99th(us): 2343, 99.9th(us): 5163, 99.99th(us): 5163\n",
-    "RecordCnt": 1000
-  },
-  {
-    "Workload": "workloadc",
-    "Plain": "Run finished, takes 167.424419ms\nREAD   - Takes(s): 0.2, Count: 1000, OPS: 6059.0, Avg(us): 161, Min(us): 115, Max(us): 2555, 50th(us): 152, 90th(us): 194, 95th(us): 212, 99th(us): 282, 99.9th(us): 1480, 99.99th(us): 2555\nTOTAL  - Takes(s): 0.2, Count: 1000, OPS: 6064.8, Avg(us): 161, Min(us): 115, Max(us): 2555, 50th(us): 152, 90th(us): 194, 95th(us): 212, 99th(us): 282, 99.9th(us): 1480, 99.99th(us): 2555\n",
-    "Branch": "Run finished, takes 217.126083ms\nREAD   - Takes(s): 0.2, Count: 1000, OPS: 4709.9, Avg(us): 210, Min(us): 159, Max(us): 5571, 50th(us): 182, 90th(us): 251, 95th(us): 271, 99th(us): 449, 99.9th(us): 1283, 99.99th(us): 5571\nTOTAL  - Takes(s): 0.2, Count: 1000, OPS: 4730.0, Avg(us): 210, Min(us): 159, Max(us): 5571, 50th(us): 182, 90th(us): 251, 95th(us): 271, 99th(us): 449, 99.9th(us): 1283, 99.99th(us): 5571\n",
-    "RecordCnt": 1000
-  },
-  {
-    "Workload": "workloadd",
-    "Plain": "Run finished, takes 257.884415ms\nINSERT - Takes(s): 0.2, Count: 51, OPS: 218.1, Avg(us): 1819, Min(us): 1500, Max(us): 8055, 50th(us): 1649, 90th(us): 1908, 95th(us): 1948, 99th(us): 1988, 99.9th(us): 8055, 99.99th(us): 8055\nREAD   - Takes(s): 0.3, Count: 949, OPS: 3719.5, Avg(us): 161, Min(us): 116, Max(us): 3119, 50th(us): 149, 90th(us): 188, 95th(us): 214, 99th(us): 312, 99.9th(us): 1738, 99.99th(us): 3119\nTOTAL  - Takes(s): 0.3, Count: 1000, OPS: 3929.8, Avg(us): 246, Min(us): 116, Max(us): 8055, 50th(us): 150, 90th(us): 212, 95th(us): 1550, 99th(us): 1808, 99.9th(us): 3119, 99.99th(us): 8055\n",
-    "Branch": "Run finished, takes 327.606335ms\nINSERT - Takes(s): 0.3, Count: 46, OPS: 148.9, Avg(us): 2211, Min(us): 1244, Max(us): 12215, 50th(us): 1798, 90th(us): 2539, 95th(us): 2851, 99th(us): 12215, 99.9th(us): 12215, 99.99th(us): 12215\nREAD   - Takes(s): 0.3, Count: 954, OPS: 2950.0, Avg(us): 226, Min(us): 163, Max(us): 5599, 50th(us): 197, 90th(us): 280, 95th(us): 315, 99th(us): 414, 99.9th(us): 1311, 99.99th(us): 5599\nTOTAL  - Takes(s): 0.3, Count: 1000, OPS: 3106.6, Avg(us): 317, Min(us): 163, Max(us): 12215, 50th(us): 199, 90th(us): 310, 95th(us): 968, 99th(us): 2011, 99.9th(us): 6747, 99.99th(us): 12215\n",
-    "RecordCnt": 1000
-  },
-  {
-    "Workload": "workloade",
-    "Plain": "Run finished, takes 431.512091ms\nINSERT - Takes(s): 0.4, Count: 38, OPS: 90.9, Avg(us): 1981, Min(us): 1436, Max(us): 8163, 50th(us): 1743, 90th(us): 1970, 95th(us): 2241, 99th(us): 8163, 99.9th(us): 8163, 99.99th(us): 8163\nSCAN   - Takes(s): 0.4, Count: 962, OPS: 2239.7, Avg(us): 359, Min(us): 182, Max(us): 2959, 50th(us): 288, 90th(us): 637, 95th(us): 739, 99th(us): 979, 99.9th(us): 1733, 99.99th(us): 2959\nTOTAL  - Takes(s): 0.4, Count: 1000, OPS: 2334.0, Avg(us): 420, Min(us): 182, Max(us): 8163, 50th(us): 292, 90th(us): 696, 95th(us): 965, 99th(us): 1792, 99.9th(us): 4519, 99.99th(us): 8163\n",
-    "Branch": "Run finished, takes 1.21727359s\nINSERT - Takes(s): 1.2, Count: 56, OPS: 47.5, Avg(us): 2299, Min(us): 1437, Max(us): 13247, 50th(us): 2009, 90th(us): 2333, 95th(us): 2769, 99th(us): 6819, 99.9th(us): 13247, 99.99th(us): 13247\nSCAN   - Takes(s): 1.2, Count: 944, OPS: 779.2, Avg(us): 1136, Min(us): 725, Max(us): 6959, 50th(us): 998, 90th(us): 1620, 95th(us): 1828, 99th(us): 2179, 99.9th(us): 2549, 99.99th(us): 6959\nTOTAL  - Takes(s): 1.2, Count: 1000, OPS: 826.1, Avg(us): 1201, Min(us): 725, Max(us): 13247, 50th(us): 1032, 90th(us): 1787, 95th(us): 2025, 99th(us): 2279, 99.9th(us): 6959, 99.99th(us): 13247\n",
-    "RecordCnt": 1000
-  }
-]
+{
+  "Workload": "workloada",
+  "Plain": "Run finished, takes 111.210296ms\nREAD   - Takes(s): 0.1, Count: 54, OPS: 534.1, Avg(us): 217, Min(us): 118, Max(us): 726, 50th(us): 212, 90th(us): 269, 95th(us): 302, 99th(us): 319, 99.9th(us): 726, 99.99th(us): 726\nTOTAL  - Takes(s): 0.1, Count: 100, OPS: 982.5, Avg(us): 1089, Min(us): 118, Max(us): 10167, 50th(us): 299, 90th(us): 1889, 95th(us): 2046, 99th(us): 6503, 99.9th(us): 10167, 99.99th(us): 10167\nUPDATE - Takes(s): 0.1, Count: 46, OPS: 453.6, Avg(us): 2113, Min(us): 994, Max(us): 10167, 50th(us): 1696, 90th(us): 2046, 95th(us): 6471, 99th(us): 10167, 99.9th(us): 10167, 99.99th(us): 10167\n",
+  "Branch": "Run finished, takes 116.50346ms\nREAD   - Takes(s): 0.1, Count: 45, OPS: 404.7, Avg(us): 457, Min(us): 190, Max(us): 5651, 50th(us): 265, 90th(us): 909, 95th(us): 938, 99th(us): 5651, 99.9th(us): 5651, 99.99th(us): 5651\nTOTAL  - Takes(s): 0.1, Count: 45, OPS: 404.3, Avg(us): 457, Min(us): 190, Max(us): 5651, 50th(us): 265, 90th(us): 909, 95th(us): 938, 99th(us): 5651, 99.9th(us): 5651, 99.99th(us): 5651\nUPDATE_ERROR - Takes(s): 0.1, Count: 55, OPS: 525.4, Avg(us): 1695, Min(us): 1249, Max(us): 5299, 50th(us): 1439, 90th(us): 2237, 95th(us): 2389, 99th(us): 2479, 99.9th(us): 5299, 99.99th(us): 5299\n",
+  "RecordCnt": 10000,
+  "OperationCnt": 100
+},
+{
+  "Workload": "workloada",
+  "Plain": "Run finished, takes 1.086082392s\nREAD   - Takes(s): 1.1, Count: 471, OPS: 434.9, Avg(us): 241, Min(us): 127, Max(us): 3561, 50th(us): 229, 90th(us): 301, 95th(us): 336, 99th(us): 412, 99.9th(us): 3561, 99.99th(us): 3561\nTOTAL  - Takes(s): 1.1, Count: 1000, OPS: 923.3, Avg(us): 1068, Min(us): 127, Max(us): 7927, 50th(us): 1345, 90th(us): 1798, 95th(us): 1906, 99th(us): 5827, 99.9th(us): 6539, 99.99th(us): 7927\nUPDATE - Takes(s): 1.1, Count: 529, OPS: 492.5, Avg(us): 1804, Min(us): 947, Max(us): 7927, 50th(us): 1675, 90th(us): 1894, 95th(us): 2113, 99th(us): 6331, 99.9th(us): 6539, 99.99th(us): 7927\n",
+  "Branch": "Run finished, takes 946.66231ms\nREAD   - Takes(s): 0.9, Count: 467, OPS: 506.1, Avg(us): 260, Min(us): 171, Max(us): 1189, 50th(us): 245, 90th(us): 318, 95th(us): 343, 99th(us): 782, 99.9th(us): 1189, 99.99th(us): 1189\nTOTAL  - Takes(s): 0.9, Count: 467, OPS: 506.1, Avg(us): 260, Min(us): 171, Max(us): 1189, 50th(us): 245, 90th(us): 318, 95th(us): 343, 99th(us): 782, 99.9th(us): 1189, 99.99th(us): 1189\nUPDATE_ERROR - Takes(s): 0.9, Count: 533, OPS: 568.7, Avg(us): 1519, Min(us): 1089, Max(us): 9911, 50th(us): 1357, 90th(us): 2095, 95th(us): 2235, 99th(us): 2441, 99.9th(us): 4279, 99.99th(us): 9911\n",
+  "RecordCnt": 10000,
+  "OperationCnt": 1000
+},
+{
+  "Workload": "workloada",
+  "Plain": "Run finished, takes 162.057584ms\nREAD   - Takes(s): 0.2, Count: 44, OPS: 288.7, Avg(us): 310, Min(us): 161, Max(us): 1401, 50th(us): 270, 90th(us): 439, 95th(us): 578, 99th(us): 1401, 99.9th(us): 1401, 99.99th(us): 1401\nTOTAL  - Takes(s): 0.2, Count: 100, OPS: 639.5, Avg(us): 1581, Min(us): 161, Max(us): 6907, 50th(us): 1794, 90th(us): 2213, 95th(us): 6143, 99th(us): 6831, 99.9th(us): 6907, 99.99th(us): 6907\nUPDATE - Takes(s): 0.2, Count: 56, OPS: 356.2, Avg(us): 2580, Min(us): 1264, Max(us): 6907, 50th(us): 2004, 90th(us): 5951, 95th(us): 6399, 99th(us): 6831, 99.9th(us): 6907, 99.99th(us): 6907\n",
+  "Branch": "Run finished, takes 92.554132ms\nREAD   - Takes(s): 0.1, Count: 57, OPS: 655.8, Avg(us): 416, Min(us): 190, Max(us): 5827, 50th(us): 249, 90th(us): 314, 95th(us): 1079, 99th(us): 1292, 99.9th(us): 5827, 99.99th(us): 5827\nTOTAL  - Takes(s): 0.1, Count: 57, OPS: 657.1, Avg(us): 416, Min(us): 190, Max(us): 5827, 50th(us): 249, 90th(us): 314, 95th(us): 1079, 99th(us): 1292, 99.9th(us): 5827, 99.99th(us): 5827\nUPDATE_ERROR - Takes(s): 0.1, Count: 43, OPS: 552.1, Avg(us): 1546, Min(us): 1270, Max(us): 5215, 50th(us): 1359, 90th(us): 1995, 95th(us): 2105, 99th(us): 5215, 99.9th(us): 5215, 99.99th(us): 5215\n",
+  "RecordCnt": 100000,
+  "OperationCnt": 100
+},

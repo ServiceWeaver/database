@@ -11,14 +11,15 @@ import (
 )
 
 type Metrics struct {
-	Workload  string
-	Plain     string
-	Branch    string
-	RecordCnt int
+	Workload     string
+	Plain        string
+	Branch       string
+	RecordCnt    int
+	OperationCnt int
 }
 
-func RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload string, recordCnt int) string {
-	dbParams := map[string]string{"pg.host": dbHost, "pg.port": dbPort, "pg.user": dbUser, "pg.db": dbName, "pg.sslmode": "disable", "recordcount": strconv.Itoa(recordCnt)}
+func RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload string, recordCnt, operationcount int) string {
+	dbParams := map[string]string{"pg.host": dbHost, "pg.port": dbPort, "pg.user": dbUser, "pg.db": dbName, "pg.sslmode": "disable", "recordcount": strconv.Itoa(recordCnt), "operationcount": strconv.Itoa(operationcount)}
 	runCmds := []string{"run", "postgresql", "-P", "workloads/" + workload, "--threads", "1"}
 
 	for key, val := range dbParams {
@@ -47,7 +48,7 @@ func LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup string
 	RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup)
 
 	dbParams := map[string]string{"pg.host": dbHost, "pg.port": dbPort, "pg.user": dbUser, "pg.db": dbName, "pg.sslmode": "disable", "dropdata": "true", "recordcount": strconv.Itoa(recordCnt)}
-	loadCmds := []string{"load", "postgresql", "-P", "workloads/" + workload, "--threads", "1"}
+	loadCmds := []string{"load", "postgresql", "-P", "workloads/" + workload, "--threads", "15"}
 
 	for key, val := range dbParams {
 		loadCmds = append(loadCmds, "-p")
@@ -95,45 +96,68 @@ func main() {
 	dbName := "testdb"
 	bin := "./bin/go-ycsb"
 
-	recordCnts := []int{1000, 10000, 100000}
+	recordCnts := []int{10000, 10000, 100000, 100000, 10000000}
 	workloads := []string{"workloada", "workloadb", "workloadc", "workloadd", "workloade"}
+	operationcounts := []int{100, 1000, 100, 1000, 1000}
 	branchScript := "usertable.sql"
 	cleanup := "cleanup.sql"
+	metricsFile := "ycsb_metrics.json"
 
-	var metricsLst []Metrics
-	for _, workload := range workloads {
-		for _, recordCnt := range recordCnts {
-			var m Metrics
-			m.RecordCnt = recordCnt
-			m.Workload = workload
-
-			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
-
-			// Run on branched db
-			RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, branchScript)
-			m.Branch = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt)
-
-			// Run on plain postgres
-			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
-			m.Plain = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt)
-			metricsLst = append(metricsLst, m)
-		}
+	if len(recordCnts) != len(operationcounts) {
+		panic("record cnts and operation cnts does not match")
 	}
 
-	// write metrics into json file
-	jsonData, err := json.MarshalIndent(metricsLst, "", "  ")
-	if err != nil {
-		panic(err)
-	}
-
-	file, err := os.Create("ycsb_metrics.json")
+	file, err := os.Create(metricsFile)
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
 
-	_, err = file.Write(jsonData)
+	_, err = file.WriteString("[\n")
 	if err != nil {
 		panic(err)
 	}
+	for j, workload := range workloads {
+		for i, recordCnt := range recordCnts {
+			var m Metrics
+			m.RecordCnt = recordCnt
+			m.Workload = workload
+			m.OperationCnt = operationcounts[i]
+
+			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
+
+			// Run on branched db
+			RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, branchScript)
+			m.Branch = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcounts[i])
+
+			// Run on plain postgres
+			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
+			m.Plain = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcounts[i])
+
+			// write metrics into json file
+			jsonData, err := json.MarshalIndent(m, "", "  ")
+			if err != nil {
+				panic(err)
+			}
+
+			// Write the JSON data to the file
+			_, err = file.Write(jsonData)
+			if err != nil {
+				panic(err)
+			}
+
+			if i != len(recordCnts)-1 && j != len(workloads)-1 {
+				_, err = file.WriteString(",\n")
+				if err != nil {
+					panic(err)
+				}
+			}
+		}
+	}
+
+	_, err = file.WriteString("\n]")
+	if err != nil {
+		panic(err)
+	}
+
 }
