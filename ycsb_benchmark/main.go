@@ -4,21 +4,31 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
+
+type latency struct {
+	times []time.Duration
+	Sum   string
+	Std   string // standard deviation
+	Mean  string
+}
 
 type Metrics struct {
 	Workload     string
-	Plain        string
-	Branch       string
+	Plain        latency
+	Branch       latency
 	RecordCnt    int
 	OperationCnt int
 }
 
-func RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload string, recordCnt, operationcount int) string {
+func RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload string, recordCnt, operationcount int) time.Duration {
 	dbParams := map[string]string{"pg.host": dbHost, "pg.port": dbPort, "pg.user": dbUser, "pg.db": dbName, "pg.sslmode": "disable", "recordcount": strconv.Itoa(recordCnt), "operationcount": strconv.Itoa(operationcount)}
 	runCmds := []string{"run", "postgresql", "-P", "workloads/" + workload, "--threads", "1"}
 
@@ -38,17 +48,45 @@ func RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload string, recordCn
 
 	// Split the string into a slice of substrings
 	result := strings.Split(string(out), "*\n")
-	if len(result) > 0 {
-		return result[len(result)-1]
+	result = strings.Split(result[len(result)-1], "\n")
+
+	// Regular expression to match the time with optional "m"
+	re := regexp.MustCompile(`takes (\d+\.\d+)m?s`)
+	match := re.FindStringSubmatch(result[0])
+
+	var duration time.Duration
+	if len(match) == 2 {
+		timeString := match[1]
+		timeFloat, err := strconv.ParseFloat(timeString, 64)
+		if err != nil {
+			panic(err)
+		}
+
+		// Check if the time is in seconds, milliseconds or minutes
+		if len(match[0]) == len("takes "+timeString+"s") {
+			duration = time.Duration(timeFloat * float64(time.Second))
+		} else if len(match[0]) == len("takes "+timeString+"ms") {
+			duration = time.Duration(timeFloat * float64(time.Millisecond))
+		} else { // minutes
+			duration = time.Duration(timeFloat * float64(time.Minute))
+		}
+
+		fmt.Println(duration) // Output: 16m27.511228s
+	} else {
+		fmt.Println("Time not found in the string")
 	}
-	return ""
+	// fmt.Printf("result:%s\n", result)
+	// result = strings.Split(result[0], "\n")
+	// fmt.Printf("result:%s\n", result)
+
+	return duration
 }
 
 func LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup string, recordCnt int) {
 	RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup)
 
 	dbParams := map[string]string{"pg.host": dbHost, "pg.port": dbPort, "pg.user": dbUser, "pg.db": dbName, "pg.sslmode": "disable", "dropdata": "true", "recordcount": strconv.Itoa(recordCnt)}
-	loadCmds := []string{"load", "postgresql", "-P", "workloads/" + workload, "--threads", "15"}
+	loadCmds := []string{"load", "postgresql", "-P", "workloads/" + workload, "--threads", "20"}
 
 	for key, val := range dbParams {
 		loadCmds = append(loadCmds, "-p")
@@ -89,6 +127,25 @@ func RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, script string) 
 	// fmt.Println(string(out))
 }
 
+func newLatency(durations []time.Duration) *latency {
+	if len(durations) == 0 {
+		return nil
+	}
+	var sum time.Duration
+	for _, t := range durations {
+		sum = sum + t
+	}
+	mean := sum / time.Duration(len(durations))
+
+	var variance float64
+	for _, d := range durations {
+		variance += math.Pow(float64(d-mean), 2)
+	}
+	variance /= float64(len(durations))
+
+	return &latency{times: durations, Sum: sum.String(), Std: time.Duration(math.Sqrt(variance)).String(), Mean: mean.String()}
+}
+
 func main() {
 	dbHost := "localhost"
 	dbUser := "postgres"
@@ -96,16 +153,12 @@ func main() {
 	dbName := "testdb"
 	bin := "./bin/go-ycsb"
 
-	recordCnts := []int{10000, 10000, 100000, 100000, 10000000}
+	recordCnt := 50000000
 	workloads := []string{"workloada", "workloadb", "workloadc", "workloadd", "workloade", "workloadf"}
-	operationcounts := []int{100, 1000, 100, 1000, 1000}
+	operationcount := 1000
 	branchScript := "usertable.sql"
 	cleanup := "cleanup.sql"
 	metricsFile := "ycsb_metrics.json"
-
-	if len(recordCnts) != len(operationcounts) {
-		panic("record cnts and operation cnts does not match")
-	}
 
 	file, err := os.Create(metricsFile)
 	if err != nil {
@@ -117,46 +170,52 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	for i, recordCnt := range recordCnts {
-		for j, workload := range workloads {
-			var m Metrics
-			m.RecordCnt = recordCnt
-			m.Workload = workload
-			m.OperationCnt = operationcounts[i]
 
+	for _, workload := range workloads {
+		var m Metrics
+		m.RecordCnt = recordCnt
+		m.Workload = workload
+		m.OperationCnt = operationcount
+
+		var plainDuration []time.Duration
+		var branchDuration []time.Duration
+
+		for _ = range 1 {
 			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
 			// Run on branched db
 			RunSqlScript(dbHost, dbUser, dbPort, dbName, bin, workload, branchScript)
-			m.Branch = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcounts[i])
+			branchDuration = append(branchDuration, RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcount))
 
 			// Run on plain postgres
 			LoadBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, cleanup, recordCnt)
-			m.Plain = RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcounts[i])
+			plainDuration = append(plainDuration, RunBenchmark(dbHost, dbUser, dbPort, dbName, bin, workload, recordCnt, operationcount))
+		}
 
-			// write metrics into json file
-			jsonData, err := json.MarshalIndent(m, "", "  ")
-			if err != nil {
-				panic(err)
-			}
+		plainLatency := newLatency(plainDuration)
+		branchLatency := newLatency(branchDuration)
+		m.Plain = *plainLatency
+		m.Branch = *branchLatency
 
-			// Write the JSON data to the file
-			_, err = file.Write(jsonData)
-			if err != nil {
-				panic(err)
-			}
+		// write metrics into json file
+		jsonData, err := json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			panic(err)
+		}
 
-			if i != len(recordCnts)-1 && j != len(workloads)-1 {
-				_, err = file.WriteString(",\n")
-				if err != nil {
-					panic(err)
-				}
-			}
+		// Write the JSON data to the file
+		_, err = file.Write(jsonData)
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = file.WriteString(",\n")
+		if err != nil {
+			panic(err)
 		}
 	}
 
-	_, err = file.WriteString("\n]")
+	_, err = file.WriteString("]")
 	if err != nil {
 		panic(err)
 	}
-
 }

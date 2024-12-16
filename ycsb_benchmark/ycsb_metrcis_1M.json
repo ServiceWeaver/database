@@ -1,0 +1,92 @@
+[
+    {
+      "Workload": "workloada",
+      "Plain": {
+        "Sum": "2m3.162678178s",
+        "Std": "84.360719ms",
+        "Mean": "1.231626781s"
+      },
+      "Branch": {
+        "Sum": "2m44.493016975s",
+        "Std": "133.927448ms",
+        "Mean": "1.644930169s"
+      },
+      "RecordCnt": 1000000,
+      "OperationCnt": 1000
+    },
+    {
+      "Workload": "workloadb",
+      "Plain": {
+        "Sum": "34.21562362s",
+        "Std": "19.750504ms",
+        "Mean": "342.156236ms"
+      },
+      "Branch": {
+        "Sum": "47.40660609s",
+        "Std": "30.399309ms",
+        "Mean": "474.06606ms"
+      },
+      "RecordCnt": 1000000,
+      "OperationCnt": 1000
+    },
+    {
+      "Workload": "workloadc",
+      "Plain": {
+        "Sum": "23.959766523s",
+        "Std": "9.748611ms",
+        "Mean": "239.597665ms"
+      },
+      "Branch": {
+        "Sum": "29.168727743s",
+        "Std": "11.116422ms",
+        "Mean": "291.687277ms"
+      },
+      "RecordCnt": 1000000,
+      "OperationCnt": 1000
+    },
+    {
+      "Workload": "workloadd",
+      "Plain": {
+        "Sum": "28.959698231s",
+        "Std": "17.416118ms",
+        "Mean": "289.596982ms"
+      },
+      "Branch": {
+        "Sum": "37.884933686s",
+        "Std": "28.023912ms",
+        "Mean": "378.849336ms"
+      },
+      "RecordCnt": 1000000,
+      "OperationCnt": 1000
+    },
+    {
+      "Workload": "workloade",
+      "Plain": {
+        "Sum": "1m5.232656928s",
+        "Std": "51.165501ms",
+        "Mean": "652.326569ms"
+      },
+      "Branch": {
+        "Sum": "2m12.535932997s",
+        "Std": "79.097361ms",
+        "Mean": "1.325359329s"
+      },
+      "RecordCnt": 1000000,
+      "OperationCnt": 1000
+    },
+    {
+      "Workload": "workloadf",
+      "Plain": {
+        "Sum": "2m14.360964856s",
+        "Std": "161.263048ms",
+        "Mean": "1.343609648s"
+      },
+      "Branch": {
+        "Sum": "3m10.665601111s",
+        "Std": "80.415705ms",
+        "Mean": "1.906656011s"
+      },
+      "RecordCnt": 1000000,
+      "OperationCnt": 1000
+    }
+    ]
