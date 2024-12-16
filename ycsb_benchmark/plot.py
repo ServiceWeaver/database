@@ -6,7 +6,7 @@ import numpy as np
 
 class Benchmark:
     def __init__(self, data):
-        self.workload = data["Workload"]
+        self.workload = data["Workload"][-1].upper()
         self.plain_mean = convert_to_ms(data["Plain"]["Mean"])
         self.plain_variance = convert_to_ms(data["Plain"]["Std"])  # Calculate variance from Std
         self.branch_mean =convert_to_ms(data["Branch"]["Mean"])
@@ -31,21 +31,17 @@ def plot(benchmarks):
     # Numbers of pairs of bars you want
     N = len(benchmarks)
 
-    # Data on X-axis
+    branch_bar = []
+    plain_bar =  []
 
-    blue_bar = []
-    # Specify the values of orange bars (height)
-    orange_bar =  []
-
-    # Error bar values
-    blue_err = []
-    orange_err = []
+    branch_err = []
+    plain_err = []
     titles = []
     for benchmark in benchmarks:
-        blue_bar.append(benchmark.plain_mean)
-        blue_err.append(benchmark.plain_variance)
-        orange_bar.append(benchmark.branch_mean)
-        orange_err.append(benchmark.branch_variance)
+        plain_bar.append(benchmark.plain_mean)
+        plain_err.append(benchmark.plain_variance)
+        branch_bar.append(benchmark.branch_mean)
+        branch_err.append(benchmark.branch_variance)
         titles.append(benchmark.workload)
 
     # Position of bars on x-axis
@@ -55,33 +51,29 @@ def plot(benchmarks):
     plt.figure(figsize=(10,8))
 
     plt.rcParams['lines.linewidth'] = 8
-    plt.tick_params(axis='both', which='major', labelsize=15)
+    plt.tick_params(axis='both', which='major', labelsize=22)
 
     # Width of a bar 
     width = 0.3       
 
     # Plotting
-    plt.bar(ind, blue_bar, width, yerr=blue_err, label='Postgres', capsize=5)
-    plt.bar(ind + width, orange_bar, width, yerr=orange_err, label='R$^+$R$^-$', capsize=5)
+    plt.bar(ind, plain_bar, width, yerr=plain_err, label='Postgres', capsize=22, color='green')
+    plt.bar(ind + width, branch_bar, width, yerr=branch_err, label='R$^+$R$^-$', capsize=22, color='blue')
 
-    plt.xlabel('Core Workload',fontsize=15)
-    plt.ylabel('Latency(ms)',fontsize=15)
-    plt.title('YCSB Benchmark 1M rows')
+    plt.xlabel('Core Workload',fontsize=22)
+    plt.ylabel('Latency(ms)',fontsize=22)
+    plt.title('YCSB Benchmark 1M Rows',fontsize=22)
 
-    # xticks()
-    # First argument - A list of positions at which ticks should be placed
-    # Second argument -  A list of labels to place at the given locations
-    plt.xticks(ind + width / 2, titles, fontsize=15)  # Corrected xtick labels
-    plt.yticks(fontsize=15)
+    plt.xticks(ind + width / 2, titles, fontsize=22)
+    plt.yticks(fontsize=22)
 
     # Finding the best position for legends and putting it
-    plt.legend(loc='best')
+    plt.legend(loc='best',prop={'size': 22})
 
     plt.savefig('ycsb.pdf', bbox_inches="tight")
 
 def main():
     benchmark = readFromFile("/usr/local/google/home/zhukexin/database/ycsb_benchmark/ycsb_metrcis_1M.json")
-    print(benchmark)
     plot(benchmark)
 
 
